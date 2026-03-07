@@ -138,7 +138,7 @@ async def scheduled_visit_alarms():
             f"목적: {v.get('purpose') or '-'}\n"
             f"참석자: {v.get('attendees') or '-'}"
         )
-        await send_telegram(msg)
+        await send_telegram(msg, use_group=True)
         mark_visit_alarm_sent(v["id"])
 
     pending_events = get_pending_event_alarms(today)
@@ -151,7 +151,7 @@ async def scheduled_visit_alarms():
             f"{e['title']}\n"
             f"{e.get('description') or ''}"
         )
-        await send_telegram(msg)
+        await send_telegram(msg, use_group=True)
         mark_event_alarm_sent(e["id"])
 
     count = len(pending_visits) + len(pending_events)

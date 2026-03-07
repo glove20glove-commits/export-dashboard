@@ -12,15 +12,16 @@ VISIT_CHAT_ID = os.getenv("TELEGRAM_VISIT_CHAT_ID", "")  # group or fallback to 
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://web-production-a69d3.up.railway.app")
 
 
-async def send_telegram(message: str):
+async def send_telegram(message: str, use_group: bool = False):
     """Send a message to the configured Telegram chat."""
-    if not BOT_TOKEN or not CHAT_ID:
-        print("[notifier] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set")
+    chat = (VISIT_CHAT_ID or CHAT_ID) if use_group else CHAT_ID
+    if not BOT_TOKEN or not chat:
+        print("[notifier] TELEGRAM_BOT_TOKEN or chat ID not set")
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient(timeout=10) as client:
         await client.post(url, data={
-            "chat_id": CHAT_ID,
+            "chat_id": chat,
             "text": message,
             "parse_mode": "HTML",
         })
