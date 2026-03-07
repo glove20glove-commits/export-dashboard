@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수출기업 대시보드</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <div class="nav-tabs">
+                <a href="/market" class="nav-tab">시장</a>
+                <div class="nav-group">
+                    <span class="nav-group-label">수출</span>
+                    <a href="/" class="nav-tab active">기업</a>
+                    <a href="/industry" class="nav-tab">산업</a>
+                </div>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/visit" class="nav-tab">탐방</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab">인원</a>
+            </div>
+            <h1>수출기업 대시보드</h1>
+        </div>
+        <p class="subtitle">KITA 수출입 통계 · 주가 · 매출 비교 | 자동 업데이트 (매월 17일)</p>
+    </header>
+
+    <main>
+        <!-- Controls -->
+        <section class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="item-select">기업 선택</label>
+                    <select id="item-select">
+                        <option value="">기업을 선택하세요</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="year-from">기간</label>
+                    <div class="date-range">
+                        <select id="year-from"></select>
+                        <span>~</span>
+                        <select id="year-to"></select>
+                    </div>
+                </div>
+                <button id="btn-add-item" class="btn btn-primary">+ 기업 추가</button>
+                <button id="btn-fetch-latest" class="btn btn-secondary">최신 데이터 가져오기</button>
+            </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="charts" id="charts-section" style="display:none;">
+            <div class="chart-container">
+                <h3>월별 수출/수입 추이 (천불)</h3>
+                <canvas id="chart-monthly"></canvas>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container half">
+                    <h3>연도별 합계 (천불)</h3>
+                    <canvas id="chart-yearly"></canvas>
+                </div>
+                <div class="chart-container half">
+                    <h3>무역수지 추이 (천불)</h3>
+                    <canvas id="chart-balance"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stock Comparison Chart -->
+        <section class="charts" id="stock-section" style="display:none;">
+            <div class="chart-container">
+                <h3 id="stock-chart-title">수출액 vs 주가 비교</h3>
+                <canvas id="chart-comparison"></canvas>
+            </div>
+        </section>
+
+        <!-- Data Table -->
+        <section class="data-table-section" id="table-section" style="display:none;">
+            <h3>월별 상세 데이터</h3>
+            <div class="table-wrapper">
+                <table id="data-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="yearMonth">년월</th>
+                            <th data-sort="export_amt">수출액(천불)</th>
+                            <th data-sort="export_rate">수출증감률(%)</th>
+                            <th data-sort="import_amt">수입액(천불)</th>
+                            <th data-sort="import_rate">수입증감률(%)</th>
+                            <th data-sort="balance">무역수지(천불)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Add Item Modal -->
+        <div id="modal-overlay" class="modal-overlay" style="display:none;">
+            <div class="modal">
+                <h3>새 기업 추가</h3>
+                <div class="form-group">
+                    <label>기업명</label>
+                    <input type="text" id="new-stock-name" placeholder="예: 오이솔루션">
+                </div>
+                <div class="form-group">
+                    <label>종목코드</label>
+                    <input type="text" id="new-stock-code" placeholder="예: 138080">
+                </div>
+                <hr style="margin:12px 0;border:none;border-top:1px solid #e5e7eb;">
+                <div class="form-group">
+                    <label>수출 품목 유형</label>
+                    <select id="new-item-type">
+                        <option value="HS">HSK</option>
+                        <option value="MTI">MTI</option>
+                        <option value="SITC">SITC</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>수출 품목 코드</label>
+                    <input type="text" id="new-item-code" placeholder="예: 851762">
+                </div>
+                <div class="form-group">
+                    <label>지역 구분</label>
+                    <select id="new-region-type">
+                        <option value="3">기초자치별</option>
+                        <option value="2">광역자치별</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>지역명</label>
+                    <input type="text" id="new-region-name" placeholder="예: 광주 북구">
+                </div>
+                <div class="form-group">
+                    <label>데이터 시작년도</label>
+                    <select id="new-year-from">
+                        <option value="2020">2020</option>
+                        <option value="2021">2021</option>
+                        <option value="2022">2022</option>
+                        <option value="2023">2023</option>
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-modal-cancel" class="btn btn-secondary">취소</button>
+                    <button id="btn-modal-save" class="btn btn-primary">추가 및 데이터 가져오기</button>
+                </div>
+                <div id="modal-status" class="modal-status"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>데이터 출처: <a href="https://stat.kita.net" target="_blank">한국무역협회 K-stat</a> | 자동 업데이트: 매월 17일 09:00</p>
+    </footer>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

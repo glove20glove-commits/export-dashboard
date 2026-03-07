@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+trade_data.db
+import_data.py
+import_stock.py
+import_revenue.py
+*.db
+*.db-shm
+*.db-wal

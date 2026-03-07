@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기업 인원 대시보드</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <div class="nav-tabs">
+                <a href="/market" class="nav-tab">시장</a>
+                <div class="nav-group">
+                    <span class="nav-group-label">수출</span>
+                    <a href="/" class="nav-tab">기업</a>
+                    <a href="/industry" class="nav-tab">산업</a>
+                </div>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/visit" class="nav-tab">탐방</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab active">인원</a>
+            </div>
+            <h1>기업 인원 대시보드</h1>
+        </div>
+        <p class="subtitle">국민연금 사업장 가입자수 | 월별 인원 변동 추적</p>
+    </header>
+
+    <main>
+        <!-- Overview Section -->
+        <section id="overview-section">
+            <div class="control-row" style="margin-bottom: 12px;">
+                <h3 style="margin:0;">사업장별 인원 현황</h3>
+                <div style="display:flex; gap:8px; margin-left:auto;">
+                    <button id="btn-add-company" class="btn btn-primary">+ 사업장 추가</button>
+                    <button id="btn-fetch-all" class="btn btn-secondary">전체 데이터 가져오기</button>
+                </div>
+            </div>
+            <div id="overview-loading" style="text-align:center; padding:40px; color:#888;">불러오는 중...</div>
+            <div class="table-wrapper" id="overview-table-wrap" style="display:none;">
+                <table id="overview-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">사업장명</th>
+                            <th>기준월</th>
+                            <th>가입자수(명)</th>
+                            <th>전월대비</th>
+                            <th>전년대비</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Company Detail Section -->
+        <section id="detail-section" style="display:none;">
+            <div class="control-row" style="margin-bottom: 12px;">
+                <button id="btn-back" class="btn btn-secondary">&larr; 전체 보기</button>
+                <h3 id="detail-title" style="margin:0 0 0 12px;"></h3>
+                <div style="display:flex; gap:8px; margin-left:auto;">
+                    <div class="control-group">
+                        <div class="date-range">
+                            <select id="year-from"></select>
+                            <span>~</span>
+                            <select id="year-to"></select>
+                        </div>
+                    </div>
+                    <button id="btn-fetch-latest" class="btn btn-secondary">데이터 갱신</button>
+                    <button id="btn-delete-company" class="btn btn-danger">삭제</button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <section class="summary-cards" id="summary-section" style="display:none;">
+                <div class="card">
+                    <div class="card-label">현재 가입자수</div>
+                    <div class="card-value" id="card-current">-</div>
+                    <div class="card-sub" id="card-current-period"></div>
+                </div>
+                <div class="card">
+                    <div class="card-label">전월 대비</div>
+                    <div class="card-value" id="card-mom">-</div>
+                    <div class="card-sub" id="card-mom-detail"></div>
+                </div>
+                <div class="card">
+                    <div class="card-label">전년 동기 대비</div>
+                    <div class="card-value" id="card-yoy">-</div>
+                    <div class="card-sub" id="card-yoy-detail"></div>
+                </div>
+            </section>
+
+            <!-- Charts -->
+            <section class="charts" id="charts-section" style="display:none;">
+                <div class="chart-container">
+                    <h3>월별 가입자수 추이 (명)</h3>
+                    <canvas id="chart-subscribers"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>월별 입사 / 퇴사 현황 (명)</h3>
+                    <canvas id="chart-hires-losses"></canvas>
+                </div>
+            </section>
+
+            <!-- Data Table -->
+            <section class="data-table-section" id="table-section" style="display:none;">
+                <h3>월별 상세 데이터</h3>
+                <div class="table-wrapper">
+                    <table id="data-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="yearMonth">년월</th>
+                                <th data-sort="subscribers">가입자수(명)</th>
+                                <th data-sort="new_hires">입사(명)</th>
+                                <th data-sort="losses">퇴사(명)</th>
+                                <th data-sort="net">순증감(명)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+
+        <!-- Add Company Modal -->
+        <div id="modal-overlay" class="modal-overlay" style="display:none;">
+            <div class="modal">
+                <h3>사업장 추가</h3>
+                <div class="form-group">
+                    <label>사업장명 검색</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="search-input" placeholder="사업장명 입력">
+                        <button id="btn-search" class="btn btn-primary" style="flex-shrink:0;">검색</button>
+                    </div>
+                </div>
+                <div class="form-group" id="search-results-group" style="display:none;">
+                    <label>검색 결과</label>
+                    <select id="search-results" size="5" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:8px;"></select>
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-modal-cancel" class="btn btn-secondary">취소</button>
+                    <button id="btn-modal-save" class="btn btn-primary">추가 및 데이터 가져오기</button>
+                </div>
+                <div id="modal-status" class="modal-status"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>데이터 출처: <a href="https://data.go.kr" target="_blank">공공데이터포털</a> | 국민연금 사업장 가입자수</p>
+    </footer>
+
+    <script src="/static/headcount.js"></script>
+</body>
+</html>

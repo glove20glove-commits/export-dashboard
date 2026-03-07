@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회사 탐방 관리</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <div class="nav-tabs">
+                <a href="/market" class="nav-tab">시장</a>
+                <div class="nav-group">
+                    <span class="nav-group-label">수출</span>
+                    <a href="/" class="nav-tab">기업</a>
+                    <a href="/industry" class="nav-tab">산업</a>
+                </div>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/visit" class="nav-tab active">탐방</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab">인원</a>
+            </div>
+            <h1>회사 탐방 관리</h1>
+        </div>
+        <p class="subtitle">탐방 일정 · 자료 · 이슈/모멘텀 · 리포트 · 컨센서스</p>
+    </header>
+
+    <main>
+        <!-- Controls -->
+        <section class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="company-select">기업 선택</label>
+                    <select id="company-select">
+                        <option value="">기업을 선택하세요</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="showModal('company-modal')">+ 회사 추가</button>
+                <button class="btn btn-primary" onclick="openNewVisitModal()" id="btn-add-visit" style="display:none;">+ 탐방 일정</button>
+                <button class="btn btn-secondary" onclick="showModal('event-modal')" id="btn-add-event" style="display:none;">+ 이슈/모멘텀</button>
+            </div>
+        </section>
+
+        <!-- Yearly Visit Stats -->
+        <section id="yearly-stats" class="yearly-stats-section" style="display:none;">
+            <div id="yearly-stats-cards" class="yearly-stats-cards"></div>
+        </section>
+
+        <!-- Upcoming Visits -->
+        <section class="upcoming-panel" id="upcoming-section">
+            <div class="upcoming-layout">
+                <div class="card visit-calendar-wrap">
+                    <div class="cal-header">
+                        <button class="cal-nav" onclick="calNav(-1)">&lt;</button>
+                        <span id="cal-title" class="cal-title"></span>
+                        <button class="cal-nav" onclick="calNav(1)">&gt;</button>
+                    </div>
+                    <table class="cal-table">
+                        <thead><tr><th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th></tr></thead>
+                        <tbody id="cal-body"></tbody>
+                    </table>
+                </div>
+                <div class="card upcoming-list-wrap">
+                    <h3 class="section-title">다가오는 탐방 일정</h3>
+                    <div id="upcoming-list" class="visit-list">
+                        <p class="empty-msg">등록된 일정이 없습니다</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- All Events Table -->
+        <section class="card" id="all-events-section" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 class="section-title" style="margin-bottom:0;">이슈 / 모멘텀 장표</h3>
+                <div class="event-filter-tabs">
+                    <button class="event-filter-btn active" data-filter="all" onclick="filterAllEvents('all', this)">전체</button>
+                    <button class="event-filter-btn" data-filter="momentum" onclick="filterAllEvents('momentum', this)">모멘텀</button>
+                    <button class="event-filter-btn" data-filter="issue" onclick="filterAllEvents('issue', this)">이슈</button>
+                    <button class="event-filter-btn" data-filter="followup" onclick="filterAllEvents('followup', this)">팔로업</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="all-events-table" id="all-events-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">일자</th>
+                            <th style="text-align:left;">기업</th>
+                            <th style="text-align:left;">유형</th>
+                            <th style="text-align:left;">제목</th>
+                            <th style="text-align:left;">내용</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-events-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- All Visit Results Table -->
+        <section class="card" id="all-visits-section" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 class="section-title" style="margin-bottom:0;">탐방 결과 장표</h3>
+                <div class="event-filter-tabs">
+                    <button class="event-filter-btn active" onclick="filterAllVisitResults('all', this)">전체</button>
+                    <button class="event-filter-btn" onclick="filterAllVisitResults('매우 좋음', this)">🤩 매우 좋음</button>
+                    <button class="event-filter-btn" onclick="filterAllVisitResults('좋음', this)">😊 좋음</button>
+                    <button class="event-filter-btn" onclick="filterAllVisitResults('보통', this)">😐 보통</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="all-events-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">탐방일</th>
+                            <th style="text-align:left;">기업</th>
+                            <th style="text-align:center;">결과</th>
+                            <th style="text-align:left;">목적</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-visits-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Company Detail (hidden until selected) -->
+        <section id="company-detail" style="display:none;">
+            <!-- Detail Tabs -->
+            <div class="card" style="margin-bottom:20px;">
+                <div class="detail-tabs">
+                    <button class="detail-tab active" data-tab="visits">일정</button>
+                    <button class="detail-tab" data-tab="materials">탐방 결과</button>
+                    <button class="detail-tab" data-tab="events">이슈/모멘텀</button>
+                    <button class="detail-tab" data-tab="reports">리포트</button>
+                    <button class="detail-tab" data-tab="consensus">컨센서스</button>
+                </div>
+
+                <!-- Tab: Visits -->
+                <div class="tab-content" id="tab-visits">
+                    <div id="visits-list" class="visit-list"></div>
+                </div>
+
+                <!-- Tab: Materials (탐방 결과) -->
+                <div class="tab-content" id="tab-materials" style="display:none;">
+                    <div style="margin-bottom:12px; display:flex; gap:8px;">
+                        <button class="btn btn-primary" onclick="showModal('material-modal')">파일 업로드</button>
+                        <button class="btn btn-secondary" onclick="showModal('textnote-modal')">텍스트 등록</button>
+                    </div>
+                    <div id="materials-list"></div>
+                </div>
+
+                <!-- Tab: Events -->
+                <div class="tab-content" id="tab-events" style="display:none;">
+                    <div id="events-list"></div>
+                </div>
+
+                <!-- Tab: Reports -->
+                <div class="tab-content" id="tab-reports" style="display:none;">
+                    <div style="margin-bottom:12px;">
+                        <button class="btn btn-primary" onclick="showModal('report-modal')">리포트 등록</button>
+                    </div>
+                    <div id="reports-list"></div>
+                </div>
+
+                <!-- Tab: Consensus -->
+                <div class="tab-content" id="tab-consensus" style="display:none;">
+                    <div style="margin-bottom:12px; display:flex; gap:8px;">
+                        <button class="btn btn-primary" onclick="fetchConsensus()">네이버에서 가져오기</button>
+                        <button class="btn btn-secondary" onclick="showModal('consensus-modal')">수동 입력</button>
+                    </div>
+                    <div id="consensus-table-wrap"></div>
+                </div>
+            </div>
+
+            <!-- Stock Chart -->
+            <div class="chart-container" id="chart-section" style="display:none;">
+                <h3>주가 추이 (탐방일 기준)</h3>
+                <canvas id="chart-stock"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal: Add Company -->
+    <div class="modal-overlay" id="company-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal">
+            <h3>회사 추가</h3>
+            <div class="form-group">
+                <label>회사명 *</label>
+                <input type="text" id="f-company-name" placeholder="예: 오이솔루션">
+            </div>
+            <div class="form-group">
+                <label>종목코드</label>
+                <input type="text" id="f-company-stock" placeholder="예: 138080">
+            </div>
+            <div class="form-group">
+                <label>업종/섹터</label>
+                <input type="text" id="f-company-sector" placeholder="예: 반도체장비">
+            </div>
+            <div class="form-group">
+                <label>메모</label>
+                <input type="text" id="f-company-notes" placeholder="메모">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('company-modal')">취소</button>
+                <button class="btn btn-primary" onclick="addCompany()">추가</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Schedule Visit -->
+    <div class="modal-overlay" id="visit-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal">
+            <h3 id="visit-modal-title">탐방 일정 등록</h3>
+            <div class="form-group">
+                <label>탐방일 *</label>
+                <input type="date" id="f-visit-date">
+            </div>
+            <div class="form-group">
+                <label>시간</label>
+                <input type="time" id="f-visit-time">
+            </div>
+            <div class="form-group">
+                <label>목적</label>
+                <input type="text" id="f-visit-purpose" placeholder="예: 공장 방문, IR 미팅">
+            </div>
+            <div class="form-group">
+                <label>참석자</label>
+                <input type="text" id="f-visit-attendees" placeholder="예: 대표이사, IR담당">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('visit-modal')">취소</button>
+                <button class="btn btn-primary" id="visit-modal-submit" onclick="addVisit()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Event -->
+    <div class="modal-overlay" id="event-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal">
+            <h3>이슈 / 모멘텀 등록</h3>
+            <div class="form-group">
+                <label>유형 *</label>
+                <select id="f-event-type">
+                    <option value="issue">이슈</option>
+                    <option value="momentum">모멘텀</option>
+                    <option value="followup">팔로업 (다시봐야할 시기)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>날짜 *</label>
+                <input type="date" id="f-event-date">
+            </div>
+            <div class="form-group">
+                <label>제목 *</label>
+                <input type="text" id="f-event-title" placeholder="예: 신규 수주 발표">
+            </div>
+            <div class="form-group">
+                <label>상세 내용</label>
+                <textarea id="f-event-desc" rows="3" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;resize:vertical;"></textarea>
+            </div>
+            <div class="form-group">
+                <label>알람 날짜 (선택)</label>
+                <input type="date" id="f-event-alarm">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('event-modal')">취소</button>
+                <button class="btn btn-primary" onclick="addEvent()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Upload Material -->
+    <div class="modal-overlay" id="material-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal">
+            <h3>파일 업로드</h3>
+            <div class="form-group">
+                <label>파일 * (최대 10MB)</label>
+                <input type="file" id="f-material-file">
+            </div>
+            <div class="form-group">
+                <label>설명</label>
+                <input type="text" id="f-material-desc" placeholder="자료 설명">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('material-modal')">취소</button>
+                <button class="btn btn-primary" onclick="uploadMaterial()">업로드</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Text Note -->
+    <div class="modal-overlay" id="textnote-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal" style="max-width:600px;">
+            <h3>텍스트 등록</h3>
+            <div class="form-group">
+                <label>제목</label>
+                <input type="text" id="f-textnote-title" placeholder="예: 탐방 메모">
+            </div>
+            <div class="form-group">
+                <label>내용 * (드래그 붙여넣기 가능)</label>
+                <textarea id="f-textnote-content" rows="12" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;resize:vertical;white-space:pre-wrap;" placeholder="텍스트를 붙여넣기 하세요"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('textnote-modal')">취소</button>
+                <button class="btn btn-primary" onclick="saveTextNote()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Report -->
+    <div class="modal-overlay" id="report-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal">
+            <h3>리포트 등록</h3>
+            <div class="form-group">
+                <label>리포트 날짜 *</label>
+                <input type="date" id="f-report-date">
+            </div>
+            <div class="form-group">
+                <label>증권사</label>
+                <input type="text" id="f-report-source" placeholder="예: 한국투자증권">
+            </div>
+            <div class="form-group">
+                <label>제목</label>
+                <input type="text" id="f-report-title" placeholder="리포트 제목">
+            </div>
+            <div class="form-group">
+                <label>목표주가</label>
+                <input type="number" id="f-report-target" placeholder="예: 25000">
+            </div>
+            <div class="form-group">
+                <label>투자의견</label>
+                <select id="f-report-rating">
+                    <option value="">선택</option>
+                    <option value="Buy">Buy</option>
+                    <option value="Hold">Hold</option>
+                    <option value="Sell">Sell</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>요약</label>
+                <textarea id="f-report-summary" rows="4" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;resize:vertical;" placeholder="핵심 내용 요약"></textarea>
+            </div>
+            <div class="form-group">
+                <label>파일 (PDF 등, 최대 10MB)</label>
+                <input type="file" id="f-report-file">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('report-modal')">취소</button>
+                <button class="btn btn-primary" onclick="uploadReport()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Manual Consensus -->
+    <div class="modal-overlay" id="consensus-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal">
+            <h3>컨센서스 수동 입력</h3>
+            <div class="form-group">
+                <label>구분 *</label>
+                <select id="f-cons-type">
+                    <option value="annual">연간</option>
+                    <option value="quarterly">분기</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>기간 * (예: 2025 또는 2025Q1)</label>
+                <input type="text" id="f-cons-period" placeholder="2025">
+            </div>
+            <div class="form-group">
+                <label>실적/추정</label>
+                <select id="f-cons-estimate">
+                    <option value="0">실적 (Actual)</option>
+                    <option value="1">추정 (Estimate)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>매출액 (억원)</label>
+                <input type="number" id="f-cons-revenue" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>영업이익 (억원)</label>
+                <input type="number" id="f-cons-op" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>순이익 (억원)</label>
+                <input type="number" id="f-cons-net" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>EPS (원)</label>
+                <input type="number" id="f-cons-eps" step="1">
+            </div>
+            <div class="form-group">
+                <label>PER (배)</label>
+                <input type="number" id="f-cons-per" step="0.1">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('consensus-modal')">취소</button>
+                <button class="btn btn-primary" onclick="addConsensus()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Visit Completion -->
+    <div class="modal-overlay" id="sentiment-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal" style="max-width:520px;">
+            <h3 style="text-align:center;">탐방 완료</h3>
+
+            <!-- Sentiment -->
+            <div style="text-align:center;margin-bottom:16px;">
+                <label class="complete-section-label">느낌</label>
+                <div class="sentiment-options">
+                    <button class="sentiment-btn" data-sentiment="매우 좋음" onclick="selectSentiment(this)"><span class="sentiment-icon">🤩</span><span class="sentiment-label">매우 좋음</span></button>
+                    <button class="sentiment-btn" data-sentiment="좋음" onclick="selectSentiment(this)"><span class="sentiment-icon">😊</span><span class="sentiment-label">좋음</span></button>
+                    <button class="sentiment-btn" data-sentiment="보통" onclick="selectSentiment(this)"><span class="sentiment-icon">😐</span><span class="sentiment-label">보통</span></button>
+                    <button class="sentiment-btn" data-sentiment="별로" onclick="selectSentiment(this)"><span class="sentiment-icon">😕</span><span class="sentiment-label">별로</span></button>
+                    <button class="sentiment-btn" data-sentiment="노관심" onclick="selectSentiment(this)"><span class="sentiment-icon">🙅</span><span class="sentiment-label">노관심</span></button>
+                </div>
+            </div>
+
+            <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+
+            <!-- File upload -->
+            <div class="form-group">
+                <label class="complete-section-label">파일 첨부 <span style="font-weight:400;color:var(--text-muted);">(선택)</span></label>
+                <input type="file" id="f-complete-file" multiple>
+            </div>
+
+            <!-- Text note -->
+            <div class="form-group">
+                <label class="complete-section-label">탐방 메모 <span style="font-weight:400;color:var(--text-muted);">(선택)</span></label>
+                <textarea id="f-complete-note" rows="5" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;resize:vertical;white-space:pre-wrap;" placeholder="탐방 내용을 메모하세요"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('sentiment-modal')">취소</button>
+                <button class="btn btn-primary" onclick="submitCompletion()">완료</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Year Return Detail -->
+    <div class="modal-overlay" id="year-return-modal" style="display:none;" onclick="closeModalOverlay(event)">
+        <div class="modal" style="max-width:640px;">
+            <h3 id="year-return-title" style="text-align:center;"></h3>
+            <div class="table-wrapper" style="max-height:400px;">
+                <table class="all-events-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">종목</th>
+                            <th style="text-align:center;">탐방일</th>
+                            <th style="text-align:right;">최고 수익률</th>
+                            <th style="text-align:right;">현재 수익률</th>
+                            <th style="text-align:center;">탐방시 느낌</th>
+                        </tr>
+                    </thead>
+                    <tbody id="year-return-tbody"></tbody>
+                </table>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideModal('year-return-modal')">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>회사 탐방 관리 대시보드</p>
+    </footer>
+
+    <script src="/static/visit.js"></script>
+</body>
+</html>
