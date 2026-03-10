@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>유튜브 모니터링</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .yt-table { table-layout:fixed; min-width:900px; }
+        .yt-table td, .yt-table th { vertical-align:top; }
+        .yt-table .summary-cell {
+            max-height:120px;
+            overflow-y:auto;
+            font-size:12px;
+            line-height:1.5;
+            color:var(--text-secondary);
+            display:block;
+            padding-right:4px;
+        }
+        .yt-table .summary-cell::-webkit-scrollbar { width:4px; }
+        .yt-table .summary-cell::-webkit-scrollbar-thumb { background:var(--border);border-radius:2px; }
+        .yt-table .title-cell {
+            font-size:13px;
+            font-weight:500;
+            line-height:1.4;
+            display:-webkit-box;
+            -webkit-line-clamp:3;
+            -webkit-box-orient:vertical;
+            overflow:hidden;
+            word-break:break-word;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -64,19 +89,39 @@
             </div>
         </section>
 
-        <!-- Video Table -->
-        <section class="data-table-section" id="table-section" style="display:none;">
-            <h3>최신 영상 목록</h3>
-            <div class="table-wrapper">
-                <table id="data-table">
+        <!-- Recent Videos (1 week) -->
+        <section class="data-table-section" id="recent-section" style="display:none;">
+            <h3>최근 일주일 영상</h3>
+            <div class="table-wrapper" style="overflow-x:auto;">
+                <table id="recent-table" class="yt-table">
                     <thead>
                         <tr>
-                            <th style="width:120px;">썸네일</th>
-                            <th data-sort="title">제목</th>
-                            <th style="min-width:200px;">요약</th>
-                            <th data-sort="channel_name" style="width:140px;">채널</th>
-                            <th data-sort="published_at" style="width:110px;">게시일</th>
-                            <th style="width:60px;">알림</th>
+                            <th style="width:100px;min-width:100px;">썸네일</th>
+                            <th data-sort="title" data-target="recent" style="width:160px;min-width:160px;">제목</th>
+                            <th style="min-width:360px;">요약</th>
+                            <th data-sort="channel_name" data-target="recent" style="width:120px;min-width:120px;">채널</th>
+                            <th data-sort="published_at" data-target="recent" style="width:100px;min-width:100px;">게시일</th>
+                            <th style="width:50px;min-width:50px;">알림</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- All Videos -->
+        <section class="data-table-section" id="table-section" style="display:none;">
+            <h3>전체 영상 목록</h3>
+            <div class="table-wrapper" style="overflow-x:auto;">
+                <table id="data-table" class="yt-table">
+                    <thead>
+                        <tr>
+                            <th style="width:100px;min-width:100px;">썸네일</th>
+                            <th data-sort="title" data-target="all" style="width:160px;min-width:160px;">제목</th>
+                            <th style="min-width:360px;">요약</th>
+                            <th data-sort="channel_name" data-target="all" style="width:120px;min-width:120px;">채널</th>
+                            <th data-sort="published_at" data-target="all" style="width:100px;min-width:100px;">게시일</th>
+                            <th style="width:50px;min-width:50px;">알림</th>
                         </tr>
                     </thead>
                     <tbody></tbody>

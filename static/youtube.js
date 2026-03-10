@@ -2,6 +2,8 @@ let channels = [];
 let videos = [];
 let sortCol = 'published_at';
 let sortAsc = false;
+let recentSortCol = 'published_at';
+let recentSortAsc = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-add').addEventListener('click', addChannel);
@@ -10,8 +12,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('channel-filter').addEventListener('change', loadVideos);
     document.getElementById('limit-select').addEventListener('change', loadVideos);
+
+    // Sort handlers for both tables
     document.querySelectorAll('#data-table th[data-sort]').forEach(th => {
-        th.addEventListener('click', () => sortTable(th.dataset.sort));
+        th.addEventListener('click', () => sortTable('all', th.dataset.sort));
+    });
+    document.querySelectorAll('#recent-table th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => sortTable('recent', th.dataset.sort));
     });
 
     await loadChannels();
@@ -132,73 +139,95 @@ async function loadVideos() {
         if (channelId) url += `&channel_id=${channelId}`;
 
         videos = await api('GET', url);
-        sortVideos();
-        renderVideos();
 
         document.getElementById('video-controls').style.display = '';
+        document.getElementById('recent-section').style.display = '';
         document.getElementById('table-section').style.display = '';
+
+        renderAll();
     } catch (e) {
         console.error('Failed to load videos:', e);
     }
 }
 
-function renderVideos() {
-    const tbody = document.querySelector('#data-table tbody');
-    if (!videos.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:24px;">영상이 없습니다</td></tr>';
+function getRecentVideos() {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const cutoff = oneWeekAgo.toISOString();
+    return videos.filter(v => v.published_at && v.published_at >= cutoff);
+}
+
+function renderAll() {
+    const recent = getRecentVideos();
+    sortList(recent, recentSortCol, recentSortAsc);
+    renderTable(document.querySelector('#recent-table tbody'), recent, 'recent');
+
+    const all = [...videos];
+    sortList(all, sortCol, sortAsc);
+    renderTable(document.querySelector('#data-table tbody'), all, 'all');
+}
+
+function renderTable(tbody, list, tableId) {
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:24px;">${tableId === 'recent' ? '최근 일주일간 영상이 없습니다' : '영상이 없습니다'}</td></tr>`;
         return;
     }
-    tbody.innerHTML = videos.map(v => {
+    tbody.innerHTML = list.map(v => {
         const ch = channels.find(c => c.id === v.channel_db_id);
         const chName = ch ? ch.channel_name : '';
         let summaryCell;
         if (v.summary) {
-            summaryCell = `<span style="font-size:12px;line-height:1.4;color:var(--text-secondary);display:block;max-width:300px;">${esc(v.summary).substring(0, 150)}${v.summary.length > 150 ? '...' : ''}</span>
+            summaryCell = `<div class="summary-cell">${esc(v.summary)}</div>
                 <button class="btn btn-secondary" style="padding:2px 6px;font-size:11px;margin-top:4px;" onclick="summarizeVideo('${esc(v.video_id)}')">재요약</button>`;
         } else {
             summaryCell = `<button class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="summarizeVideo('${esc(v.video_id)}')">요약</button>`;
         }
         return `
         <tr>
-            <td>${v.thumbnail_url ? `<a href="${esc(v.url)}" target="_blank"><img src="${esc(v.thumbnail_url)}" alt="" style="width:112px;height:63px;object-fit:cover;border-radius:4px;"></a>` : '-'}</td>
-            <td><a href="${esc(v.url)}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500;">${esc(v.title)}</a></td>
+            <td>${v.thumbnail_url ? `<a href="${esc(v.url)}" target="_blank"><img src="${esc(v.thumbnail_url)}" alt="" style="width:100px;height:56px;object-fit:cover;border-radius:4px;"></a>` : '-'}</td>
+            <td><a href="${esc(v.url)}" target="_blank" class="title-cell" style="color:var(--text);text-decoration:none;">${esc(v.title)}</a></td>
             <td>${summaryCell}</td>
-            <td>${esc(chName)}</td>
-            <td>${v.published_at ? fmtDate(v.published_at) : '-'}</td>
+            <td style="font-size:13px;">${esc(chName)}</td>
+            <td style="font-size:13px;">${v.published_at ? fmtDate(v.published_at) : '-'}</td>
             <td>${v.notified ? '<span style="color:var(--success);">&#10003;</span>' : '<span style="color:var(--text-secondary);">-</span>'}</td>
         </tr>`;
     }).join('');
 }
 
-function sortTable(col) {
-    if (sortCol === col) {
-        sortAsc = !sortAsc;
+function sortTable(tableId, col) {
+    if (tableId === 'recent') {
+        if (recentSortCol === col) { recentSortAsc = !recentSortAsc; }
+        else { recentSortCol = col; recentSortAsc = col === 'title' || col === 'channel_name'; }
+        updateSortIndicators('#recent-table', recentSortCol, recentSortAsc);
     } else {
-        sortCol = col;
-        sortAsc = col === 'title' || col === 'channel_name';
+        if (sortCol === col) { sortAsc = !sortAsc; }
+        else { sortCol = col; sortAsc = col === 'title' || col === 'channel_name'; }
+        updateSortIndicators('#data-table', sortCol, sortAsc);
     }
-    document.querySelectorAll('#data-table th').forEach(th => {
-        th.classList.remove('sorted-asc', 'sorted-desc');
-        if (th.dataset.sort === col) {
-            th.classList.add(sortAsc ? 'sorted-asc' : 'sorted-desc');
-        }
-    });
-    sortVideos();
-    renderVideos();
+    renderAll();
 }
 
-function sortVideos() {
-    videos.sort((a, b) => {
-        let va = a[sortCol] || '';
-        let vb = b[sortCol] || '';
-        if (sortCol === 'channel_name') {
+function updateSortIndicators(tableSelector, col, asc) {
+    document.querySelectorAll(`${tableSelector} th`).forEach(th => {
+        th.classList.remove('sorted-asc', 'sorted-desc');
+        if (th.dataset.sort === col) {
+            th.classList.add(asc ? 'sorted-asc' : 'sorted-desc');
+        }
+    });
+}
+
+function sortList(list, col, asc) {
+    list.sort((a, b) => {
+        let va = a[col] || '';
+        let vb = b[col] || '';
+        if (col === 'channel_name') {
             const ca = channels.find(c => c.id === a.channel_db_id);
             const cb = channels.find(c => c.id === b.channel_db_id);
             va = ca ? ca.channel_name : '';
             vb = cb ? cb.channel_name : '';
         }
-        if (va < vb) return sortAsc ? -1 : 1;
-        if (va > vb) return sortAsc ? 1 : -1;
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
         return 0;
     });
 }
