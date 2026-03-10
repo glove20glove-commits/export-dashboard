@@ -14,7 +14,7 @@ try:
     _gemini_api_key = os.getenv("GEMINI_API_KEY", "")
     if _gemini_api_key:
         genai.configure(api_key=_gemini_api_key)
-        _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+        _gemini_model = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
         SUMMARIZE_ENABLED = True
     else:
         _gemini_model = None
