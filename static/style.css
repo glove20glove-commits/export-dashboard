@@ -28,6 +28,7 @@ header {
 
 header .header-top {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 20px;
 }
@@ -38,10 +39,12 @@ header .subtitle { font-size: 0.85rem; opacity: 0.8; margin-top: 4px; }
 /* Nav Tabs */
 .nav-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     background: rgba(255,255,255,0.15);
     border-radius: 8px;
     padding: 3px;
+    flex-shrink: 0;
 }
 
 .nav-tab {
