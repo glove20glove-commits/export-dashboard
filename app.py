@@ -10,11 +10,17 @@ from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 try:
-    import anthropic
-    _anthropic_client = anthropic.Anthropic()
-    SUMMARIZE_ENABLED = True
+    import google.generativeai as genai
+    _gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+    if _gemini_api_key:
+        genai.configure(api_key=_gemini_api_key)
+        _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+        SUMMARIZE_ENABLED = True
+    else:
+        _gemini_model = None
+        SUMMARIZE_ENABLED = False
 except Exception:
-    _anthropic_client = None
+    _gemini_model = None
     SUMMARIZE_ENABLED = False
 
 try:
@@ -178,8 +184,8 @@ async def scheduled_visit_alarms():
 
 
 def _summarize_video(title: str, description: str) -> str | None:
-    """Summarize a YouTube video using Claude API. Returns summary text or None on failure."""
-    if not SUMMARIZE_ENABLED or not _anthropic_client:
+    """Summarize a YouTube video using Gemini API. Returns summary text or None on failure."""
+    if not SUMMARIZE_ENABLED or not _gemini_model:
         return None
     if not description or not description.strip():
         return None
@@ -189,12 +195,8 @@ def _summarize_video(title: str, description: str) -> str | None:
             f"제목: {title}\n\n"
             f"설명:\n{description[:3000]}"
         )
-        resp = _anthropic_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resp.content[0].text.strip()
+        resp = _gemini_model.generate_content(prompt)
+        return resp.text.strip()
     except Exception as e:
         print(f"[youtube] Summary error: {e}")
         return None
@@ -1253,7 +1255,7 @@ async def api_youtube_fetch_channel(db_id: int):
 def api_youtube_summarize(video_id: str):
     """Generate or regenerate a summary for a specific video."""
     if not SUMMARIZE_ENABLED:
-        raise HTTPException(503, "요약 기능을 사용할 수 없습니다 (anthropic 패키지 필요)")
+        raise HTTPException(503, "요약 기능을 사용할 수 없습니다 (GEMINI_API_KEY 필요)")
     vids = get_youtube_videos(limit=500)
     vid = next((v for v in vids if v["video_id"] == video_id), None)
     if not vid:

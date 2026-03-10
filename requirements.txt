@@ -4,4 +4,4 @@ apscheduler
 httpx
 python-dotenv
 python-multipart
-anthropic
+google-generativeai
