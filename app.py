@@ -28,6 +28,10 @@ try:
         add_nps_company, get_nps_companies, get_nps_company, update_nps_company,
         delete_nps_company, upsert_nps_data, get_nps_data, get_nps_overview,
         upsert_market_index, get_market_index, upsert_market_export, get_market_export,
+        add_youtube_channel, get_youtube_channels, get_youtube_channel,
+        delete_youtube_channel, update_youtube_channel,
+        upsert_youtube_video, get_youtube_videos, get_known_video_ids,
+        mark_youtube_video_notified,
     )
     from dashboard.kita_client import fetch_range, fetch_region_month, fetch_industry_range, fetch_industry_month, get_daily_request_count
     from dashboard.stock_client import fetch_stock_prices, fetch_daily_stock_prices, search_stock_by_name, fetch_index_prices
@@ -35,6 +39,7 @@ try:
     from dashboard.tourism_client import fetch_country_list, fetch_all_countries_month, fetch_tourism_range
     from dashboard.nps_client import search_company as nps_search, fetch_nps_data
     from dashboard.notifier import notify_update, notify_visit_update_sync, send_telegram
+    from dashboard.youtube_client import resolve_channel, fetch_latest_videos
 except ImportError:
     from db import (
         init_db, add_item, get_items, get_item, delete_item,
@@ -54,6 +59,10 @@ except ImportError:
         add_nps_company, get_nps_companies, get_nps_company, update_nps_company,
         delete_nps_company, upsert_nps_data, get_nps_data, get_nps_overview,
         upsert_market_index, get_market_index, upsert_market_export, get_market_export,
+        add_youtube_channel, get_youtube_channels, get_youtube_channel,
+        delete_youtube_channel, update_youtube_channel,
+        upsert_youtube_video, get_youtube_videos, get_known_video_ids,
+        mark_youtube_video_notified,
     )
     from kita_client import fetch_range, fetch_region_month, fetch_industry_range, fetch_industry_month, get_daily_request_count
     from stock_client import fetch_stock_prices, fetch_daily_stock_prices, search_stock_by_name, fetch_index_prices
@@ -61,6 +70,7 @@ except ImportError:
     from tourism_client import fetch_country_list, fetch_all_countries_month, fetch_tourism_range
     from nps_client import search_company as nps_search, fetch_nps_data
     from notifier import notify_update, notify_visit_update_sync, send_telegram
+    from youtube_client import resolve_channel, fetch_latest_videos
 
 scheduler = AsyncIOScheduler()
 
@@ -159,6 +169,39 @@ async def scheduled_visit_alarms():
         print(f"[scheduler] Sent {count} visit/event alarms for {today}")
 
 
+async def scheduled_youtube_check():
+    """Hourly job: check all YouTube channels for new videos and notify."""
+    channels = get_youtube_channels()
+    total_new = 0
+    for ch in channels:
+        try:
+            known = get_known_video_ids(ch["id"])
+            videos = await fetch_latest_videos(ch["channel_id"], max_results=5)
+            for v in videos:
+                if v["video_id"] not in known:
+                    upsert_youtube_video(
+                        ch["id"], v["video_id"], v["title"],
+                        description=v.get("description"),
+                        thumbnail_url=v.get("thumbnail_url"),
+                        published_at=v.get("published_at"),
+                        url=v["url"],
+                    )
+                    msg = (
+                        f"<b>유튜브 새 영상</b>\n\n"
+                        f"<b>{ch['channel_name']}</b>\n"
+                        f"{v['title']}\n\n"
+                        f"<a href=\"{v['url']}\">영상 보기</a>"
+                    )
+                    await send_telegram(msg)
+                    mark_youtube_video_notified(v["video_id"])
+                    total_new += 1
+            update_youtube_channel(ch["id"], last_checked_at=datetime.datetime.now().isoformat())
+        except Exception as e:
+            print(f"[youtube] Error checking {ch.get('channel_name')}: {e}")
+    if total_new:
+        print(f"[youtube] Found {total_new} new videos")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -179,8 +222,15 @@ async def lifespan(app: FastAPI):
         id="daily_visit_alarms",
         replace_existing=True,
     )
+    scheduler.add_job(
+        scheduled_youtube_check,
+        "interval",
+        hours=1,
+        id="youtube_check",
+        replace_existing=True,
+    )
     scheduler.start()
-    print("[scheduler] Started - monthly fetch on 17th at 09:00, daily visit alarms at 08:00")
+    print("[scheduler] Started - monthly fetch on 17th at 09:00, daily visit alarms at 08:00, youtube check hourly")
     yield
     scheduler.shutdown()
 
@@ -1090,6 +1140,78 @@ def api_market_import_exports(req: MarketExportImport):
     return {"imported": count}
 
 
+# --- YouTube API ---
+
+class YouTubeChannelCreate(BaseModel):
+    identifier: str  # channel ID, handle (@username), or name
+
+
+@app.get("/api/youtube/channels")
+def api_youtube_channels():
+    return get_youtube_channels()
+
+
+@app.post("/api/youtube/channels")
+async def api_youtube_add_channel(req: YouTubeChannelCreate):
+    info = await resolve_channel(req.identifier)
+    if not info:
+        raise HTTPException(404, "채널을 찾을 수 없습니다")
+    db_id = add_youtube_channel(info["channel_id"], info["channel_name"], info["channel_url"])
+    if not db_id:
+        raise HTTPException(409, "이미 등록된 채널입니다")
+    # Fetch initial videos
+    try:
+        videos = await fetch_latest_videos(info["channel_id"], max_results=10)
+        for v in videos:
+            upsert_youtube_video(
+                db_id, v["video_id"], v["title"],
+                description=v.get("description"),
+                thumbnail_url=v.get("thumbnail_url"),
+                published_at=v.get("published_at"),
+                url=v["url"],
+            )
+        update_youtube_channel(db_id, last_checked_at=datetime.datetime.now().isoformat())
+    except Exception as e:
+        print(f"[youtube] Initial fetch error: {e}")
+    return {"id": db_id, **info}
+
+
+@app.delete("/api/youtube/channels/{db_id}")
+def api_youtube_delete_channel(db_id: int):
+    ch = get_youtube_channel(db_id)
+    if not ch:
+        raise HTTPException(404, "채널 없음")
+    delete_youtube_channel(db_id)
+    return {"deleted": True}
+
+
+@app.get("/api/youtube/videos")
+def api_youtube_videos(channel_id: int | None = None, limit: int = 50):
+    return get_youtube_videos(channel_db_id=channel_id, limit=limit)
+
+
+@app.post("/api/youtube/channels/{db_id}/fetch")
+async def api_youtube_fetch_channel(db_id: int):
+    ch = get_youtube_channel(db_id)
+    if not ch:
+        raise HTTPException(404, "채널 없음")
+    known = get_known_video_ids(db_id)
+    videos = await fetch_latest_videos(ch["channel_id"], max_results=10)
+    new_count = 0
+    for v in videos:
+        if v["video_id"] not in known:
+            upsert_youtube_video(
+                db_id, v["video_id"], v["title"],
+                description=v.get("description"),
+                thumbnail_url=v.get("thumbnail_url"),
+                published_at=v.get("published_at"),
+                url=v["url"],
+            )
+            new_count += 1
+    update_youtube_channel(db_id, last_checked_at=datetime.datetime.now().isoformat())
+    return {"fetched": len(videos), "new": new_count}
+
+
 # --- Static files ---
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -1122,3 +1244,7 @@ def headcount():
 @app.get("/market")
 def market():
     return FileResponse(os.path.join(static_dir, "market.html"))
+
+@app.get("/youtube")
+def youtube():
+    return FileResponse(os.path.join(static_dir, "youtube.html"))

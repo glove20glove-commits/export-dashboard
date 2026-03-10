@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유튜브 모니터링</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <div class="nav-tabs">
+                <a href="/market" class="nav-tab">시장</a>
+                <div class="nav-group">
+                    <span class="nav-group-label">수출</span>
+                    <a href="/" class="nav-tab">기업</a>
+                    <a href="/industry" class="nav-tab">산업</a>
+                </div>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/visit" class="nav-tab">탐방</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab">인원</a>
+                <a href="/youtube" class="nav-tab active">유튜브</a>
+            </div>
+            <h1>유튜브 모니터링</h1>
+        </div>
+        <p class="subtitle">등록 채널 신규 업로드 알림 | YouTube Data API v3</p>
+    </header>
+
+    <main>
+        <!-- Channel Add -->
+        <section class="controls">
+            <div class="control-row">
+                <div class="control-group" style="flex:1;">
+                    <label for="channel-input">채널 추가</label>
+                    <input type="text" id="channel-input" placeholder="채널 ID, @핸들, 또는 채널명 입력" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;">
+                </div>
+                <button id="btn-add" class="btn btn-primary">등록</button>
+            </div>
+        </section>
+
+        <!-- Channel List -->
+        <section class="summary-cards" id="channel-cards">
+            <p style="color:var(--text-secondary);padding:12px;">등록된 채널이 없습니다. 위에서 채널을 추가해주세요.</p>
+        </section>
+
+        <!-- Video Filter -->
+        <section class="controls" id="video-controls" style="display:none;">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="channel-filter">채널 필터</label>
+                    <select id="channel-filter">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="limit-select">표시 개수</label>
+                    <select id="limit-select">
+                        <option value="20">20개</option>
+                        <option value="50" selected>50개</option>
+                        <option value="100">100개</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Video Table -->
+        <section class="data-table-section" id="table-section" style="display:none;">
+            <h3>최신 영상 목록</h3>
+            <div class="table-wrapper">
+                <table id="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width:120px;">썸네일</th>
+                            <th data-sort="title">제목</th>
+                            <th data-sort="channel_name" style="width:140px;">채널</th>
+                            <th data-sort="published_at" style="width:110px;">게시일</th>
+                            <th style="width:60px;">알림</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>데이터 출처: <a href="https://developers.google.com/youtube/v3" target="_blank">YouTube Data API v3</a></p>
+    </footer>
+
+    <script src="/static/youtube.js"></script>
+</body>
+</html>

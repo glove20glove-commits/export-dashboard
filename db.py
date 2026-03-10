@@ -206,6 +206,32 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_nps_data_company_date
             ON nps_data(company_id, year, month);
 
+            -- 유튜브 채널 모니터링 테이블
+            CREATE TABLE IF NOT EXISTS youtube_channels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id TEXT NOT NULL UNIQUE,
+                channel_name TEXT,
+                channel_url TEXT,
+                last_checked_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS youtube_videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_db_id INTEGER NOT NULL REFERENCES youtube_channels(id) ON DELETE CASCADE,
+                video_id TEXT NOT NULL UNIQUE,
+                title TEXT,
+                description TEXT,
+                summary TEXT,
+                thumbnail_url TEXT,
+                published_at TEXT,
+                url TEXT,
+                notified INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_youtube_videos_channel
+            ON youtube_videos(channel_db_id, published_at);
+
             -- 시장 지표 테이블
             CREATE TABLE IF NOT EXISTS market_indices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -909,3 +935,105 @@ def get_market_export(category, year_from=None, year_to=None):
             params.append(str(year_to))
         sql += " ORDER BY year, month"
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+# --- youtube_channels / youtube_videos CRUD ---
+
+def add_youtube_channel(channel_id, channel_name=None, channel_url=None):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO youtube_channels (channel_id, channel_name, channel_url) VALUES (?, ?, ?)",
+            (channel_id, channel_name, channel_url),
+        )
+        if cur.lastrowid:
+            return cur.lastrowid
+        row = conn.execute("SELECT id FROM youtube_channels WHERE channel_id = ?", (channel_id,)).fetchone()
+        return row["id"] if row else None
+
+
+def get_youtube_channels():
+    with get_db() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM youtube_channels ORDER BY created_at DESC"
+        ).fetchall()]
+
+
+def get_youtube_channel(db_id):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM youtube_channels WHERE id = ?", (db_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def update_youtube_channel(db_id, channel_name=None, last_checked_at=None):
+    with get_db() as conn:
+        fields, params = [], []
+        if channel_name is not None:
+            fields.append("channel_name = ?"); params.append(channel_name)
+        if last_checked_at is not None:
+            fields.append("last_checked_at = ?"); params.append(last_checked_at)
+        if not fields:
+            return
+        params.append(db_id)
+        conn.execute(f"UPDATE youtube_channels SET {', '.join(fields)} WHERE id = ?", params)
+
+
+def delete_youtube_channel(db_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM youtube_channels WHERE id = ?", (db_id,))
+
+
+def upsert_youtube_video(channel_db_id, video_id, title, description=None, summary=None,
+                          thumbnail_url=None, published_at=None, url=None):
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT INTO youtube_videos
+                (channel_db_id, video_id, title, description, summary, thumbnail_url, published_at, url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(video_id) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description,
+                summary = CASE WHEN excluded.summary IS NOT NULL THEN excluded.summary ELSE summary END,
+                thumbnail_url = excluded.thumbnail_url,
+                published_at = excluded.published_at,
+                url = excluded.url
+        """, (channel_db_id, video_id, title, description, summary, thumbnail_url, published_at, url))
+        return cur.lastrowid
+
+
+def get_youtube_videos(channel_db_id=None, limit=50, unnotified_only=False):
+    with get_db() as conn:
+        sql = """
+            SELECT v.*, c.channel_name, c.channel_id
+            FROM youtube_videos v
+            JOIN youtube_channels c ON v.channel_db_id = c.id
+        """
+        params = []
+        clauses = []
+        if channel_db_id is not None:
+            clauses.append("v.channel_db_id = ?"); params.append(channel_db_id)
+        if unnotified_only:
+            clauses.append("v.notified = 0")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY v.published_at DESC"
+        if limit:
+            sql += f" LIMIT {int(limit)}"
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def mark_youtube_video_notified(video_id):
+    with get_db() as conn:
+        conn.execute("UPDATE youtube_videos SET notified = 1 WHERE video_id = ?", (video_id,))
+
+
+def update_youtube_video_summary(video_id, summary):
+    with get_db() as conn:
+        conn.execute("UPDATE youtube_videos SET summary = ? WHERE video_id = ?", (summary, video_id))
+
+
+def get_known_video_ids(channel_db_id):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT video_id FROM youtube_videos WHERE channel_db_id = ?", (channel_db_id,)
+        ).fetchall()
+        return {r["video_id"] for r in rows}
