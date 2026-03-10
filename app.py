@@ -10,6 +10,14 @@ from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 try:
+    import anthropic
+    _anthropic_client = anthropic.Anthropic()
+    SUMMARIZE_ENABLED = True
+except Exception:
+    _anthropic_client = None
+    SUMMARIZE_ENABLED = False
+
+try:
     from dashboard.db import (
         init_db, add_item, get_items, get_item, delete_item,
         upsert_trade_data, get_trade_data, get_yearly_summary, get_latest_month,
@@ -31,7 +39,7 @@ try:
         add_youtube_channel, get_youtube_channels, get_youtube_channel,
         delete_youtube_channel, update_youtube_channel,
         upsert_youtube_video, get_youtube_videos, get_known_video_ids,
-        mark_youtube_video_notified,
+        mark_youtube_video_notified, update_youtube_video_summary,
     )
     from dashboard.kita_client import fetch_range, fetch_region_month, fetch_industry_range, fetch_industry_month, get_daily_request_count
     from dashboard.stock_client import fetch_stock_prices, fetch_daily_stock_prices, search_stock_by_name, fetch_index_prices
@@ -62,7 +70,7 @@ except ImportError:
         add_youtube_channel, get_youtube_channels, get_youtube_channel,
         delete_youtube_channel, update_youtube_channel,
         upsert_youtube_video, get_youtube_videos, get_known_video_ids,
-        mark_youtube_video_notified,
+        mark_youtube_video_notified, update_youtube_video_summary,
     )
     from kita_client import fetch_range, fetch_region_month, fetch_industry_range, fetch_industry_month, get_daily_request_count
     from stock_client import fetch_stock_prices, fetch_daily_stock_prices, search_stock_by_name, fetch_index_prices
@@ -169,8 +177,31 @@ async def scheduled_visit_alarms():
         print(f"[scheduler] Sent {count} visit/event alarms for {today}")
 
 
+def _summarize_video(title: str, description: str) -> str | None:
+    """Summarize a YouTube video using Claude API. Returns summary text or None on failure."""
+    if not SUMMARIZE_ENABLED or not _anthropic_client:
+        return None
+    if not description or not description.strip():
+        return None
+    try:
+        prompt = (
+            f"다음 유튜브 영상의 제목과 설명을 읽고, 핵심 내용을 한국어로 3~5문장으로 요약해줘.\n\n"
+            f"제목: {title}\n\n"
+            f"설명:\n{description[:3000]}"
+        )
+        resp = _anthropic_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+    except Exception as e:
+        print(f"[youtube] Summary error: {e}")
+        return None
+
+
 async def scheduled_youtube_check():
-    """Hourly job: check all YouTube channels for new videos and notify."""
+    """Hourly job: check all YouTube channels for new videos, notify, and summarize."""
     channels = get_youtube_channels()
     total_new = 0
     for ch in channels:
@@ -186,12 +217,18 @@ async def scheduled_youtube_check():
                         published_at=v.get("published_at"),
                         url=v["url"],
                     )
+                    # Auto-summarize new video
+                    summary = _summarize_video(v["title"], v.get("description", ""))
+                    if summary:
+                        update_youtube_video_summary(v["video_id"], summary)
                     msg = (
                         f"<b>유튜브 새 영상</b>\n\n"
                         f"<b>{ch['channel_name']}</b>\n"
                         f"{v['title']}\n\n"
-                        f"<a href=\"{v['url']}\">영상 보기</a>"
                     )
+                    if summary:
+                        msg += f"<i>{summary}</i>\n\n"
+                    msg += f"<a href=\"{v['url']}\">영상 보기</a>"
                     await send_telegram(msg)
                     mark_youtube_video_notified(v["video_id"])
                     total_new += 1
@@ -1210,6 +1247,22 @@ async def api_youtube_fetch_channel(db_id: int):
             new_count += 1
     update_youtube_channel(db_id, last_checked_at=datetime.datetime.now().isoformat())
     return {"fetched": len(videos), "new": new_count}
+
+
+@app.post("/api/youtube/videos/{video_id}/summarize")
+def api_youtube_summarize(video_id: str):
+    """Generate or regenerate a summary for a specific video."""
+    if not SUMMARIZE_ENABLED:
+        raise HTTPException(503, "요약 기능을 사용할 수 없습니다 (anthropic 패키지 필요)")
+    vids = get_youtube_videos(limit=500)
+    vid = next((v for v in vids if v["video_id"] == video_id), None)
+    if not vid:
+        raise HTTPException(404, "영상을 찾을 수 없습니다")
+    summary = _summarize_video(vid["title"], vid.get("description", ""))
+    if not summary:
+        raise HTTPException(422, "요약 생성에 실패했습니다 (설명이 비어있거나 API 오류)")
+    update_youtube_video_summary(video_id, summary)
+    return {"video_id": video_id, "summary": summary}
 
 
 # --- Static files ---

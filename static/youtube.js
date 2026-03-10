@@ -145,16 +145,24 @@ async function loadVideos() {
 function renderVideos() {
     const tbody = document.querySelector('#data-table tbody');
     if (!videos.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:24px;">영상이 없습니다</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:24px;">영상이 없습니다</td></tr>';
         return;
     }
     tbody.innerHTML = videos.map(v => {
         const ch = channels.find(c => c.id === v.channel_db_id);
         const chName = ch ? ch.channel_name : '';
+        let summaryCell;
+        if (v.summary) {
+            summaryCell = `<span style="font-size:12px;line-height:1.4;color:var(--text-secondary);display:block;max-width:300px;">${esc(v.summary).substring(0, 150)}${v.summary.length > 150 ? '...' : ''}</span>
+                <button class="btn btn-secondary" style="padding:2px 6px;font-size:11px;margin-top:4px;" onclick="summarizeVideo('${esc(v.video_id)}')">재요약</button>`;
+        } else {
+            summaryCell = `<button class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="summarizeVideo('${esc(v.video_id)}')">요약</button>`;
+        }
         return `
         <tr>
             <td>${v.thumbnail_url ? `<a href="${esc(v.url)}" target="_blank"><img src="${esc(v.thumbnail_url)}" alt="" style="width:112px;height:63px;object-fit:cover;border-radius:4px;"></a>` : '-'}</td>
             <td><a href="${esc(v.url)}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500;">${esc(v.title)}</a></td>
+            <td>${summaryCell}</td>
             <td>${esc(chName)}</td>
             <td>${v.published_at ? fmtDate(v.published_at) : '-'}</td>
             <td>${v.notified ? '<span style="color:var(--success);">&#10003;</span>' : '<span style="color:var(--text-secondary);">-</span>'}</td>
@@ -193,6 +201,20 @@ function sortVideos() {
         if (va > vb) return sortAsc ? 1 : -1;
         return 0;
     });
+}
+
+// --- Summarize ---
+async function summarizeVideo(videoId) {
+    try {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '요약 중...';
+        const result = await api('POST', `/api/youtube/videos/${videoId}/summarize`);
+        await loadVideos();
+    } catch (e) {
+        alert('요약 실패: ' + e.message);
+        await loadVideos();
+    }
 }
 
 // --- Helpers ---

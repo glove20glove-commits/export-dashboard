@@ -4,3 +4,4 @@ apscheduler
 httpx
 python-dotenv
 python-multipart
+anthropic
