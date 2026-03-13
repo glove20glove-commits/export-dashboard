@@ -5,3 +5,5 @@ httpx
 python-dotenv
 python-multipart
 anthropic
+feedparser
+beautifulsoup4

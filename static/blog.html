@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>블로그 모니터링</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .blog-table { table-layout:fixed; min-width:900px; }
+        .blog-table td, .blog-table th { vertical-align:top; }
+        .blog-table .summary-cell {
+            max-height:120px; overflow-y:auto; font-size:12px;
+            line-height:1.5; color:var(--text-secondary); display:block; padding-right:4px;
+        }
+        .blog-table .summary-cell::-webkit-scrollbar { width:4px; }
+        .blog-table .summary-cell::-webkit-scrollbar-thumb { background:var(--border);border-radius:2px; }
+        .blog-table .title-cell {
+            font-size:13px; font-weight:500; line-height:1.4;
+            display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+            overflow:hidden; word-break:break-word;
+        }
+        .lang-badge {
+            display:inline-block; padding:2px 6px; border-radius:4px;
+            font-size:11px; font-weight:600; line-height:1.4;
+        }
+        .lang-badge.ko { background:#dbeafe; color:#1d4ed8; }
+        .lang-badge.en { background:#fef3c7; color:#92400e; }
+        .lang-badge.ja { background:#fce7f3; color:#9d174d; }
+        .lang-badge.zh { background:#fee2e2; color:#991b1b; }
+        .lang-badge.other { background:#f1f5f9; color:#475569; }
+        .translated-badge {
+            display:inline-block; padding:1px 5px; border-radius:3px;
+            font-size:10px; font-weight:600; background:#d1fae5; color:#065f46;
+            margin-left:4px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-top">
+        <div class="nav-tabs">
+            <a href="/market" class="nav-tab">시장</a>
+            <div class="nav-group">
+                <span class="nav-group-label">수출</span>
+                <a href="/" class="nav-tab">기업</a>
+                <a href="/industry" class="nav-tab">산업</a>
+            </div>
+            <a href="/carbon" class="nav-tab">탄소배출권</a>
+            <a href="/visit" class="nav-tab">탐방</a>
+            <a href="/tourism" class="nav-tab">관광</a>
+            <a href="/headcount" class="nav-tab">인원</a>
+            <a href="/youtube" class="nav-tab">유튜브</a>
+            <a href="/blog" class="nav-tab active">블로그</a>
+        </div>
+        <h1>블로그 모니터링</h1>
+    </div>
+    <p class="subtitle">등록 블로그 신규 글 알림 | RSS / 웹 스크래핑 + AI 요약 & 번역</p>
+</header>
+
+<main>
+    <!-- 블로그 추가 -->
+    <section class="controls">
+        <div class="control-row">
+            <div class="control-group" style="flex:1;">
+                <label for="blog-input">블로그 추가</label>
+                <input type="text" id="blog-input"
+                       placeholder="블로그 URL 입력 (예: https://openai.com/blog, https://techcrunch.com)"
+                       style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;">
+            </div>
+            <button id="btn-add" class="btn btn-primary">등록</button>
+        </div>
+    </section>
+
+    <!-- 등록된 블로그 목록 -->
+    <section class="summary-cards" id="feed-cards">
+        <p style="color:var(--text-secondary);padding:12px;">등록된 블로그가 없습니다. 위에서 블로그를 추가해주세요.</p>
+    </section>
+
+    <!-- 필터 -->
+    <section class="controls" id="article-controls" style="display:none;">
+        <div class="control-row">
+            <div class="control-group">
+                <label for="feed-filter">블로그 필터</label>
+                <select id="feed-filter">
+                    <option value="">전체</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="limit-select">표시 개수</label>
+                <select id="limit-select">
+                    <option value="20">20개</option>
+                    <option value="50" selected>50개</option>
+                    <option value="100">100개</option>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <!-- 최근 일주일 글 -->
+    <section class="data-table-section" id="recent-section" style="display:none;">
+        <h3>최근 일주일 글</h3>
+        <div class="table-wrapper" style="overflow-x:auto;">
+            <table id="recent-table" class="blog-table">
+                <thead>
+                    <tr>
+                        <th data-sort="title" style="width:200px;min-width:200px;">제목</th>
+                        <th style="min-width:360px;">요약</th>
+                        <th style="width:80px;min-width:80px;">언어</th>
+                        <th data-sort="feed_name" style="width:140px;min-width:140px;">블로그</th>
+                        <th data-sort="published_at" style="width:100px;min-width:100px;">게시일</th>
+                        <th style="width:50px;min-width:50px;">알림</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 전체 글 목록 -->
+    <section class="data-table-section" id="table-section" style="display:none;">
+        <h3>전체 글 목록</h3>
+        <div class="table-wrapper" style="overflow-x:auto;">
+            <table id="data-table" class="blog-table">
+                <thead>
+                    <tr>
+                        <th data-sort="title" style="width:200px;min-width:200px;">제목</th>
+                        <th style="min-width:360px;">요약</th>
+                        <th style="width:80px;min-width:80px;">언어</th>
+                        <th data-sort="feed_name" style="width:140px;min-width:140px;">블로그</th>
+                        <th data-sort="published_at" style="width:100px;min-width:100px;">게시일</th>
+                        <th style="width:50px;min-width:50px;">알림</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <p>데이터 출처: RSS / 웹 스크래핑 | AI 요약: Anthropic Claude</p>
+</footer>
+
+<script src="/static/blog.js"></script>
+</body>
+</html>

@@ -40,6 +40,9 @@ try:
         delete_youtube_channel, update_youtube_channel,
         upsert_youtube_video, get_youtube_videos, get_known_video_ids,
         mark_youtube_video_notified, update_youtube_video_summary,
+        add_blog_feed, get_blog_feeds, get_blog_feed, update_blog_feed, delete_blog_feed,
+        upsert_blog_article, get_blog_articles, get_blog_article, update_blog_article_summary,
+        get_known_blog_guids,
     )
     from dashboard.kita_client import fetch_range, fetch_region_month, fetch_industry_range, fetch_industry_month, get_daily_request_count
     from dashboard.stock_client import fetch_stock_prices, fetch_daily_stock_prices, search_stock_by_name, fetch_index_prices
@@ -48,6 +51,7 @@ try:
     from dashboard.nps_client import search_company as nps_search, fetch_nps_data
     from dashboard.notifier import notify_update, notify_visit_update_sync, send_telegram
     from dashboard.youtube_client import resolve_channel, fetch_latest_videos
+    from dashboard.blog_client import discover_feed, fetch_articles_rss, fetch_articles_scrape, fetch_article_content
 except ImportError:
     from db import (
         init_db, add_item, get_items, get_item, delete_item,
@@ -71,6 +75,9 @@ except ImportError:
         delete_youtube_channel, update_youtube_channel,
         upsert_youtube_video, get_youtube_videos, get_known_video_ids,
         mark_youtube_video_notified, update_youtube_video_summary,
+        add_blog_feed, get_blog_feeds, get_blog_feed, update_blog_feed, delete_blog_feed,
+        upsert_blog_article, get_blog_articles, get_blog_article, update_blog_article_summary,
+        get_known_blog_guids,
     )
     from kita_client import fetch_range, fetch_region_month, fetch_industry_range, fetch_industry_month, get_daily_request_count
     from stock_client import fetch_stock_prices, fetch_daily_stock_prices, search_stock_by_name, fetch_index_prices
@@ -79,6 +86,7 @@ except ImportError:
     from nps_client import search_company as nps_search, fetch_nps_data
     from notifier import notify_update, notify_visit_update_sync, send_telegram
     from youtube_client import resolve_channel, fetch_latest_videos
+    from blog_client import discover_feed, fetch_articles_rss, fetch_articles_scrape, fetch_article_content
 
 scheduler = AsyncIOScheduler()
 
@@ -1265,6 +1273,154 @@ def api_youtube_summarize(video_id: str):
     return {"video_id": video_id, "summary": summary}
 
 
+# ============================
+#  Blog Monitoring API
+# ============================
+
+class BlogFeedCreate(BaseModel):
+    url: str
+
+
+def _summarize_blog(title: str, content: str) -> dict:
+    """블로그 글 요약 + 언어 감지 + 번역 (Anthropic Claude)."""
+    if not SUMMARIZE_ENABLED or not _anthropic_client:
+        return {"summary": "", "language": "", "translated": False}
+    text = content[:5000] if content else title
+    if not text or not text.strip():
+        return {"summary": "", "language": "", "translated": False}
+    try:
+        prompt = (
+            "다음 블로그 글의 제목과 본문을 분석하세요.\n\n"
+            "1. 글의 원래 언어를 감지하세요 (ISO 639-1 코드: en, ko, ja, zh 등)\n"
+            "2. 핵심 내용을 한국어로 3~5문장으로 요약하세요\n"
+            "3. 원래 언어가 한국어가 아닌 경우, 요약을 한국어로 작성하세요\n\n"
+            "반드시 아래 JSON 형식으로만 응답하세요:\n"
+            '{"language": "감지된_언어_코드", "summary": "한국어_요약_내용", "translated": true_또는_false}\n\n'
+            f"제목: {title}\n\n본문:\n{text}"
+        )
+        resp = _anthropic_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        import json
+        raw = resp.content[0].text.strip()
+        # JSON 부분만 추출
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start >= 0 and end > start:
+            result = json.loads(raw[start:end])
+            return {
+                "summary": result.get("summary", ""),
+                "language": result.get("language", ""),
+                "translated": bool(result.get("translated", False)),
+            }
+        return {"summary": raw, "language": "", "translated": False}
+    except Exception as e:
+        print(f"[blog] Summary error: {e}")
+        return {"summary": "", "language": "", "translated": False}
+
+
+@app.get("/api/blog/feeds")
+def api_blog_feeds():
+    return get_blog_feeds()
+
+
+@app.post("/api/blog/feeds")
+async def api_blog_add_feed(req: BlogFeedCreate):
+    url = req.url.strip()
+    if not url.startswith("http"):
+        url = "https://" + url
+
+    try:
+        info = await discover_feed(url)
+    except Exception as e:
+        raise HTTPException(400, f"URL 접근 실패: {str(e)[:200]}")
+
+    feed_id = add_blog_feed(url, info["feed_url"], info["title"], info["language"])
+    if not feed_id:
+        raise HTTPException(409, "이미 등록된 블로그입니다")
+
+    # 등록 직후 글 자동 수집
+    try:
+        if info["feed_url"]:
+            articles = await fetch_articles_rss(info["feed_url"])
+        else:
+            articles = await fetch_articles_scrape(url)
+        for a in articles:
+            upsert_blog_article(
+                feed_id, a["guid"], a["url"], a["title"],
+                author=a.get("author", ""),
+                published_at=a.get("published_at", ""),
+                content=a.get("content", ""),
+            )
+        update_blog_feed(feed_id, last_checked=datetime.datetime.now().strftime("%Y-%m-%d"))
+    except Exception as e:
+        print(f"[blog] Initial fetch error: {e}")
+
+    return {"id": feed_id, "title": info["title"], "feed_url": info["feed_url"]}
+
+
+@app.delete("/api/blog/feeds/{feed_id}")
+def api_blog_delete_feed(feed_id: int):
+    feed = get_blog_feed(feed_id)
+    if not feed:
+        raise HTTPException(404, "블로그 없음")
+    delete_blog_feed(feed_id)
+    return {"deleted": True}
+
+
+@app.get("/api/blog/articles")
+def api_blog_articles(feed_id: int | None = None, limit: int = 50):
+    return get_blog_articles(feed_id=feed_id, limit=limit)
+
+
+@app.post("/api/blog/feeds/{feed_id}/fetch")
+async def api_blog_fetch_feed(feed_id: int):
+    feed = get_blog_feed(feed_id)
+    if not feed:
+        raise HTTPException(404, "블로그 없음")
+
+    known = get_known_blog_guids(feed_id)
+    if feed.get("feed_url"):
+        articles = await fetch_articles_rss(feed["feed_url"])
+    else:
+        articles = await fetch_articles_scrape(feed["url"])
+
+    new_count = 0
+    for a in articles:
+        if a["guid"] not in known:
+            upsert_blog_article(
+                feed_id, a["guid"], a["url"], a["title"],
+                author=a.get("author", ""),
+                published_at=a.get("published_at", ""),
+                content=a.get("content", ""),
+            )
+            new_count += 1
+
+    update_blog_feed(feed_id, last_checked=datetime.datetime.now().strftime("%Y-%m-%d"))
+    return {"fetched": len(articles), "new": new_count}
+
+
+@app.post("/api/blog/articles/{article_id}/summarize")
+async def api_blog_summarize(article_id: int):
+    art = get_blog_article(article_id)
+    if not art:
+        raise HTTPException(404, "글을 찾을 수 없습니다")
+
+    content = art.get("content", "") or ""
+    # 본문이 없으면 페이지에서 직접 가져오기
+    if not content and art.get("url"):
+        content = await fetch_article_content(art["url"])
+
+    result = _summarize_blog(art["title"], content)
+    if not result["summary"]:
+        raise HTTPException(422, "요약 생성에 실패했습니다")
+
+    update_blog_article_summary(article_id, result["summary"], result["language"], result["translated"])
+    return {"article_id": article_id, **result}
+
+
 # --- Static files ---
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -1301,3 +1457,7 @@ def market():
 @app.get("/youtube")
 def youtube():
     return FileResponse(os.path.join(static_dir, "youtube.html"))
+
+@app.get("/blog")
+def blog():
+    return FileResponse(os.path.join(static_dir, "blog.html"))

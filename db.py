@@ -254,6 +254,36 @@ def init_db():
                 fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(category, year, month)
             );
+
+            -- 블로그 모니터링 테이블
+            CREATE TABLE IF NOT EXISTS blog_feeds (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                url           TEXT NOT NULL UNIQUE,
+                feed_url      TEXT,
+                title         TEXT NOT NULL DEFAULT '',
+                language      TEXT DEFAULT '',
+                last_checked  TEXT,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS blog_articles (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                feed_id       INTEGER NOT NULL REFERENCES blog_feeds(id) ON DELETE CASCADE,
+                guid          TEXT NOT NULL,
+                url           TEXT NOT NULL,
+                title         TEXT NOT NULL DEFAULT '',
+                author        TEXT DEFAULT '',
+                published_at  TEXT,
+                content       TEXT DEFAULT '',
+                summary       TEXT DEFAULT '',
+                language      TEXT DEFAULT '',
+                translated    INTEGER DEFAULT 0,
+                notified      INTEGER DEFAULT 0,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(feed_id, guid)
+            );
+            CREATE INDEX IF NOT EXISTS idx_blog_articles_feed
+            ON blog_articles(feed_id, published_at);
         """)
         # Migration: add text_content column if missing
         try:
@@ -1037,3 +1067,94 @@ def get_known_video_ids(channel_db_id):
             "SELECT video_id FROM youtube_videos WHERE channel_db_id = ?", (channel_db_id,)
         ).fetchall()
         return {r["video_id"] for r in rows}
+
+
+# --- blog_feeds / blog_articles CRUD ---
+
+def add_blog_feed(url, feed_url=None, title="", language=""):
+    with get_db() as conn:
+        try:
+            cur = conn.execute(
+                "INSERT INTO blog_feeds (url, feed_url, title, language) VALUES (?, ?, ?, ?)",
+                (url, feed_url, title, language),
+            )
+            return cur.lastrowid
+        except Exception:
+            return None
+
+
+def get_blog_feeds():
+    with get_db() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM blog_feeds ORDER BY created_at DESC"
+        ).fetchall()]
+
+
+def get_blog_feed(feed_id):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM blog_feeds WHERE id = ?", (feed_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def update_blog_feed(feed_id, last_checked=None, title=None):
+    with get_db() as conn:
+        fields, params = [], []
+        if last_checked is not None:
+            fields.append("last_checked = ?"); params.append(last_checked)
+        if title is not None:
+            fields.append("title = ?"); params.append(title)
+        if not fields:
+            return
+        params.append(feed_id)
+        conn.execute(f"UPDATE blog_feeds SET {', '.join(fields)} WHERE id = ?", params)
+
+
+def delete_blog_feed(feed_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM blog_articles WHERE feed_id = ?", (feed_id,))
+        conn.execute("DELETE FROM blog_feeds WHERE id = ?", (feed_id,))
+
+
+def upsert_blog_article(feed_id, guid, url, title, author="", published_at="", content=""):
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT OR IGNORE INTO blog_articles
+                (feed_id, guid, url, title, author, published_at, content)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (feed_id, guid, url, title, author, published_at, content))
+        return cur.lastrowid  # 0 if ignored (duplicate)
+
+
+def get_blog_articles(feed_id=None, limit=50):
+    with get_db() as conn:
+        sql = "SELECT * FROM blog_articles"
+        params = []
+        if feed_id is not None:
+            sql += " WHERE feed_id = ?"
+            params.append(feed_id)
+        sql += " ORDER BY published_at DESC, created_at DESC"
+        if limit:
+            sql += f" LIMIT {int(limit)}"
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def get_blog_article(article_id):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM blog_articles WHERE id = ?", (article_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def update_blog_article_summary(article_id, summary, language="", translated=False):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE blog_articles SET summary = ?, language = ?, translated = ? WHERE id = ?",
+            (summary, language, 1 if translated else 0, article_id),
+        )
+
+
+def get_known_blog_guids(feed_id):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT guid FROM blog_articles WHERE feed_id = ?", (feed_id,)
+        ).fetchall()
+        return {r["guid"] for r in rows}
