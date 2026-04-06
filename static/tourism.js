@@ -350,7 +350,9 @@ function updateYearlyChart(data) {
 // --- Table ---
 function updateTable(data) {
     const tbody = document.querySelector('#data-table tbody');
+    const mobileWrap = document.getElementById('detail-mobile-cards');
     tbody.innerHTML = '';
+    if (mobileWrap) mobileWrap.innerHTML = '';
     data.forEach(d => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -359,7 +361,27 @@ function updateTable(data) {
             <td class="${d.change_rate < 0 ? 'negative' : ''}">${d.change_rate.toFixed(1)}</td>
         `;
         tbody.appendChild(tr);
+
+        if (mobileWrap) {
+            const rateColor = d.change_rate < 0 ? '#dc2626' : (d.change_rate > 0 ? '#16a34a' : 'var(--text)');
+            const card = document.createElement('div');
+            card.className = 'mobile-card';
+            card.innerHTML = `
+                <div class="m-head">
+                    <div class="m-title">${d.year}-${d.month}</div>
+                </div>
+                <div class="m-grid">
+                    <div class="m-k">방한인원</div><div class="m-v">${num(d.visitors)}</div>
+                    <div class="m-k">전년비</div><div class="m-v" style="color:${rateColor};">${d.change_rate.toFixed(1)}%</div>
+                </div>
+            `;
+            mobileWrap.appendChild(card);
+        }
     });
+
+    if (mobileWrap && data.length === 0) {
+        mobileWrap.innerHTML = '<div class="mobile-empty">표시할 데이터가 없습니다.</div>';
+    }
 }
 
 function sortTable(col) {

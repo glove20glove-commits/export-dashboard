@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분기실적</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .panel { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+        .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .input, .select, .textarea { border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px; }
+        .input, .select { min-height:36px; }
+        .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .hint { color:var(--text-secondary); font-size:12px; }
+
+        table { width:100%; border-collapse:collapse; }
+        th, td { border-bottom:1px solid var(--border); padding:8px; font-size:13px; vertical-align:top; }
+        th { color:var(--text-secondary); background:#fafafa; position:sticky; top:0; z-index:2; }
+        .right { text-align:right; }
+        .yoy.up { color:#16a34a; font-weight:600; }
+        .yoy.down { color:#dc2626; font-weight:600; }
+        .mini { font-size:11px; color:var(--text-secondary); line-height:1.5; white-space:pre-line; }
+        .reason-box { width:280px; min-height:66px; border:1px solid var(--border); border-radius:8px; padding:7px; font-size:12px; line-height:1.5; }
+
+        .sortable { cursor:pointer; user-select:none; }
+        .sortable.active { color:var(--primary); font-weight:700; }
+        .tab-btn { border:1px solid var(--border); background:#fff; border-radius:999px; padding:7px 12px; cursor:pointer; font-size:13px; }
+        .tab-btn.active { border-color:var(--primary); color:var(--primary); font-weight:700; }
+        .tab-pane { display:none; }
+        .tab-pane.active { display:block; }
+        .stock-chip { border:1px solid var(--border); border-radius:999px; background:#fff; padding:4px 9px; cursor:pointer; font-size:12px; }
+        .stock-chip.active { border-color:var(--primary); color:var(--primary); font-weight:700; }
+        .stock-chip-all { display:inline-flex; flex-direction:column; align-items:center; text-align:center; gap:2px; border-radius:10px; padding:7px 10px; line-height:1.2; }
+        .stock-chip-all .name { font-size:16px; font-weight:700; color:var(--text-primary); }
+        .stock-chip-all .code { font-size:14px; color:var(--text-secondary); }
+        #tab-all th:nth-child(-n+7), #tab-all td:nth-child(-n+7) { font-size:15px; }
+        #tab-detail td.mini { font-size:14px; line-height:1.75; color:#374151; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="header-top">
+        <div class="nav-tabs">
+            <div class="nav-group">
+                <span class="nav-group-label">시장</span>
+                <a href="/market" class="nav-tab">국내</a>
+                <a href="/us-market" class="nav-tab">미국</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">수출</span>
+                <a href="/" class="nav-tab">기업</a>
+                <a href="/industry" class="nav-tab">산업</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">참고 데이터</span>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab">인원</a>
+                    <a href="/usdc" class="nav-tab">USDC</a>
+                    <a href="/deposit-fund" class="nav-tab">예탁금</a>
+                    <a href="/semiconductor-prices" class="nav-tab">반도체가격</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">개별 종목 데이터</span>
+                <a href="/trading-trend" class="nav-tab">매매동향</a>
+                <a href="/quarterly-performance" class="nav-tab active">분기실적</a>
+                <a href="/stock-monitor" class="nav-tab">종목주가</a>
+                <a href="/disclosure-compare" class="nav-tab">공시비교</a>
+                <a href="/overhang" class="nav-tab">오버행 현황</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">모니터링</span>
+                <a href="/youtube" class="nav-tab">유튜브</a>
+                <a href="/blog" class="nav-tab">블로그</a>
+            </div>
+            <span class="nav-spacer"></span>
+            <a href="/visit" class="nav-tab">탐방</a>
+        </div>
+        <h1>분기실적</h1>
+    </div>
+    <p class="subtitle">종목별 최근 4개분기 매출액·영업이익·당기순이익 + YoY 정렬 + 호실적 이유 관리</p>
+</header>
+
+<main>
+    <section class="panel">
+        <div class="row" style="margin-bottom:8px;">
+            <strong>모니터링 종목</strong>
+        </div>
+        <div class="row">
+            <input id="w-code" class="input mono" placeholder="종목코드(6자리)" style="width:130px;">
+            <input id="w-name" class="input" placeholder="종목명" style="width:220px;">
+            <button id="btn-add-watch" class="btn btn-primary">종목 추가</button>
+            <button id="btn-watch-manage" class="btn btn-secondary">관리모드 OFF</button>
+            <button id="btn-refresh" class="btn btn-secondary">실적 동기화</button>
+            <span id="sync-msg" class="hint"></span>
+        </div>
+        <div id="watch-summary" class="hint" style="margin-top:8px;"></div>
+        <div class="row" style="margin-top:8px;">
+            <input id="watch-search" class="input" placeholder="등록 종목 검색 (종목명/코드)" style="width:260px;">
+        </div>
+        <div id="watchlist" class="hint" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="panel">
+        <div class="row" style="margin-bottom:10px;">
+            <button id="tab-btn-all" class="tab-btn active">전종목</button>
+            <button id="tab-btn-detail" class="tab-btn">종목 상세</button>
+        </div>
+
+        <div id="tab-all" class="tab-pane active">
+            <div class="row" style="margin-bottom:8px;">
+                <label>분기 선택</label>
+                <select id="quarter-select-all" class="select"></select>
+                <span class="hint">정렬: 매출액/영업이익/당기순이익/각 YoY 헤더 클릭</span>
+            </div>
+            <div style="overflow:auto; max-height:68vh;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>종목</th>
+                            <th class="right sortable-all" data-sort="revenue">매출액</th>
+                            <th class="right sortable-all" data-sort="revenue">매출 YoY</th>
+                            <th class="right sortable-all" data-sort="operating_profit">영업이익</th>
+                            <th class="right sortable-all" data-sort="operating_profit">영업이익 YoY</th>
+                            <th class="right sortable-all" data-sort="net_income">당기순이익</th>
+                            <th class="right sortable-all" data-sort="net_income">당기순이익 YoY</th>
+                            <th>호실적 이유 (수정 가능)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-all"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-detail" class="tab-pane">
+            <div class="row" style="margin-bottom:8px;">
+                <label>분기 선택</label>
+                <select id="quarter-select" class="select"></select>
+                <button id="btn-prev-stock" class="btn btn-secondary" style="padding:4px 10px;">이전 종목</button>
+                <button id="btn-next-stock" class="btn btn-secondary" style="padding:4px 10px;">다음 종목</button>
+                <span id="selected-stock" class="hint"></span>
+            </div>
+
+            <div style="overflow:auto; max-height:68vh;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>종목</th>
+                            <th>최근 4개분기 매출액</th>
+                            <th>최근 4개분기 영업이익</th>
+                            <th>최근 4개분기 당기순이익</th>
+                            <th class="right">매출액</th>
+                            <th class="right">매출 YoY</th>
+                            <th class="right">영업이익</th>
+                            <th class="right">영업이익 YoY</th>
+                            <th class="right">당기순이익</th>
+                            <th class="right">당기순이익 YoY</th>
+                            <th>호실적 이유 (수정 가능)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <p>실적 데이터: FnGuide(자동수집) | 호실적 이유: 검색 스니펫 기반 자동생성 + 수동수정</p>
+</footer>
+
+<script src="/static/quarterly-performance.js?v=20260323-1"></script>
+</body>
+</html>

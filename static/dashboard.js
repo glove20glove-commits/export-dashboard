@@ -355,6 +355,7 @@ async function loadStockComparison(tradeData) {
 // --- Table ---
 function updateTable(data) {
     const tbody = document.querySelector('#data-table tbody');
+    const mobile = document.getElementById('company-mobile-cards');
     tbody.innerHTML = '';
     data.forEach(d => {
         const tr = document.createElement('tr');
@@ -368,6 +369,25 @@ function updateTable(data) {
         `;
         tbody.appendChild(tr);
     });
+
+    if (mobile) {
+        if (!data.length) {
+            mobile.innerHTML = '<div class="mobile-empty">월별 데이터가 없습니다.</div>';
+        } else {
+            mobile.innerHTML = data.map(d => `
+                <article class="mobile-card">
+                    <div class="m-head"><div class="m-title">${d.year}-${d.month}</div></div>
+                    <div class="m-grid">
+                        <div class="m-k">수출액(천불)</div><div class="m-v">${num(d.export_amt)}</div>
+                        <div class="m-k">수출증감률(%)</div><div class="m-v ${d.export_rate < 0 ? 'negative' : 'positive'}">${Number(d.export_rate || 0).toFixed(1)}</div>
+                        <div class="m-k">수입액(천불)</div><div class="m-v">${num(d.import_amt)}</div>
+                        <div class="m-k">수입증감률(%)</div><div class="m-v ${d.import_rate < 0 ? 'negative' : 'positive'}">${Number(d.import_rate || 0).toFixed(1)}</div>
+                        <div class="m-k">무역수지(천불)</div><div class="m-v">${num(d.balance)}</div>
+                    </div>
+                </article>
+            `).join('');
+        }
+    }
 }
 
 function sortTable(col) {

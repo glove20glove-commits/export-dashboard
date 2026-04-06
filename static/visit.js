@@ -3,14 +3,20 @@ let currentCompanyId = null;
 let stockChart = null;
 let visitReturns = {};
 let cachedVisits = [];
+const VALID_TABS = new Set(['visits', 'materials', 'events', 'reports', 'consensus']);
+let requestedTabFromUrl = null;
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', async () => {
     await loadCompanies();
 
-    // Auto-select company from URL query param ?company=ID
+    // Auto-select company from URL query param ?company=ID and optional tab ?tab=events
     const urlParams = new URLSearchParams(window.location.search);
     const companyParam = urlParams.get('company');
+    const tabParam = urlParams.get('tab');
+    if (tabParam && VALID_TABS.has(tabParam)) {
+        requestedTabFromUrl = tabParam;
+    }
     if (companyParam) {
         const sel = document.getElementById('company-select');
         sel.value = companyParam;
@@ -31,7 +37,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('upcoming-section').style.display = 'none';
             document.getElementById('all-events-section').style.display = 'none';
             document.getElementById('all-visits-section').style.display = 'none';
-            switchTab('visits');
+            const targetTab = requestedTabFromUrl && VALID_TABS.has(requestedTabFromUrl)
+                ? requestedTabFromUrl
+                : 'visits';
+            switchTab(targetTab);
+            requestedTabFromUrl = null;
         } else {
             document.getElementById('btn-add-visit').style.display = 'none';
             document.getElementById('btn-add-event').style.display = 'none';
@@ -244,7 +254,7 @@ async function loadUpcoming() {
             <span><strong>${v.visit_date}</strong> ${v.visit_time || ''}</span>
             <span><strong>${v.company_name}</strong></span>
             <span>${v.purpose || '-'}</span>
-            <button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="editVisit(${v.id}, '${v.visit_date}', '${v.visit_time || ''}', '${(v.purpose || '').replace(/'/g, "\\'")}', '${(v.attendees || '').replace(/'/g, "\\'")}')">수정</button>
+            <button class="btn btn-secondary upcoming-edit-btn" onclick="editVisit(${v.id}, '${v.visit_date}', '${v.visit_time || ''}', '${(v.purpose || '').replace(/'/g, "\\'")}', '${(v.attendees || '').replace(/'/g, "\\'")}')">수정</button>
         </div>
     `).join('');
 }
@@ -438,6 +448,7 @@ async function loadYearlyStats() {
         container.innerHTML = years.map(year => {
             const s = yearStats[year];
             const clickable = s.allReturns.length > 0;
+            const top5 = s.allReturns.slice(0, 5);
             const bestHtml = s.best
                 ? `<div class="ys-best" ${clickable ? `onclick="showYearReturns('${year}')" style="cursor:pointer;"` : ''}>
                     <span class="ys-best-label">Best</span>
@@ -446,12 +457,31 @@ async function loadYearlyStats() {
                    </div>
                    <div class="ys-current" ${clickable ? `onclick="showYearReturns('${year}')" style="cursor:pointer;"` : ''}>현재 수익률: <span class="${s.best.currentReturn >= 0 ? 'positive' : 'negative'}">${s.best.currentReturn >= 0 ? '+' : ''}${s.best.currentReturn.toFixed(1)}%</span></div>`
                 : '<div class="ys-best"><span class="ys-no-data">주가 데이터 없음</span></div>';
+            const top5Html = top5.length
+                ? `<div class="ys-top5" ${clickable ? `onclick="showYearReturns('${year}')" style="cursor:pointer;"` : ''}>
+                    <div class="ys-top5-title">수익률 TOP 1-5</div>
+                    <ul class="ys-top5-list">
+                        ${top5.map((r, idx) => `
+                            <li class="ys-top5-item">
+                                <span class="ys-rank">${idx + 1}위</span>
+                                <span class="ys-top5-name">${r.name}</span>
+                                <span class="ys-top5-return ${r.maxReturn >= 0 ? 'positive' : 'negative'}">${r.maxReturn >= 0 ? '+' : ''}${r.maxReturn.toFixed(1)}%</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                   </div>`
+                : `<div class="ys-top5"><div class="ys-top5-title">수익률 TOP 1-5</div><div class="ys-no-data">표시할 수익률 데이터 없음</div></div>`;
             return `
                 <div class="ys-card">
-                    <div class="ys-year">${year}</div>
-                    <div class="ys-count"><span class="ys-count-label">탐방 횟수 : </span>${s.count}<span class="ys-unit">회</span></div>
-                    <div class="ys-companies">${s.companies}개 기업</div>
-                    ${bestHtml}
+                    <div class="ys-layout">
+                        <div class="ys-left">
+                            <div class="ys-year">${year}</div>
+                            <div class="ys-count"><span class="ys-count-label">탐방 횟수 : </span>${s.count}<span class="ys-unit">회</span></div>
+                            <div class="ys-companies">${s.companies}개 기업</div>
+                            ${bestHtml}
+                        </div>
+                        ${top5Html}
+                    </div>
                 </div>
             `;
         }).join('');

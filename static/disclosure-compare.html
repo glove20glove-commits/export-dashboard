@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공시비교</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .panel { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+        .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .input, .select { border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px; min-height:36px; }
+        .hint { color:var(--text-secondary); font-size:12px; }
+        .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { border-bottom:1px solid var(--border); padding:8px; font-size:13px; vertical-align:top; }
+        th { color:var(--text-secondary); background:#fafafa; position:sticky; top:0; z-index:1; }
+        .right { text-align:right; }
+        .up { color:#16a34a; font-weight:700; }
+        .down { color:#dc2626; font-weight:700; }
+        .grid-3 { display:grid; grid-template-columns: repeat(3, minmax(180px,1fr)); gap:10px; }
+        .card { border:1px solid var(--border); border-radius:10px; padding:10px; background:#fafafa; }
+        .card .k { font-size:12px; color:var(--text-secondary); }
+        .card .v { font-size:18px; font-weight:800; margin-top:4px; }
+        .suggest-wrap { width:100%; }
+        .changed-row { background:#fff7ed; }
+        .added-row { background:#f0fdf4; }
+        .removed-row { background:#fef2f2; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="header-top">
+        <div class="nav-tabs">
+            <div class="nav-group">
+                <span class="nav-group-label">시장</span>
+                <a href="/market" class="nav-tab">국내</a>
+                <a href="/us-market" class="nav-tab">미국</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">수출</span>
+                <a href="/" class="nav-tab">기업</a>
+                <a href="/industry" class="nav-tab">산업</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">참고 데이터</span>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab">인원</a>
+                    <a href="/usdc" class="nav-tab">USDC</a>
+                    <a href="/deposit-fund" class="nav-tab">예탁금</a>
+                    <a href="/semiconductor-prices" class="nav-tab">반도체가격</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">개별 종목 데이터</span>
+                <a href="/trading-trend" class="nav-tab">매매동향</a>
+                <a href="/quarterly-performance" class="nav-tab">분기실적</a>
+                <a href="/stock-monitor" class="nav-tab">종목주가</a>
+                <a href="/disclosure-compare" class="nav-tab active">공시비교</a>
+                <a href="/overhang" class="nav-tab">오버행 현황</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">모니터링</span>
+                <a href="/youtube" class="nav-tab">유튜브</a>
+                <a href="/blog" class="nav-tab">블로그</a>
+            </div>
+            <span class="nav-spacer"></span>
+            <a href="/visit" class="nav-tab">탐방</a>
+        </div>
+        <h1>공시비교</h1>
+    </div>
+    <p class="subtitle">선택한 기업의 분기/반기/사업보고서 2개를 비교해 달라진 재무 항목을 표시합니다.</p>
+</header>
+
+<main>
+    <section class="panel">
+        <div class="row">
+            <label>종목 선택</label>
+            <input id="stock-query" class="input" placeholder="종목명 입력 (예: 삼성전자)" style="min-width:280px;">
+            <button id="btn-search-stock" class="btn">검색</button>
+            <span id="stock-selected" class="hint">선택: -</span>
+            <div id="stock-suggest" class="suggest-wrap"></div>
+            <label>비교 1</label>
+            <select id="left-report" class="select" style="min-width:260px;"></select>
+            <label>비교 2</label>
+            <select id="right-report" class="select" style="min-width:260px;"></select>
+            <button id="btn-compare" class="btn btn-primary">비교 실행</button>
+            <span id="msg" class="hint"></span>
+        </div>
+        <div class="row" style="margin-top:8px;">
+            <label>텍스트 단위</label>
+            <select id="text-unit" class="select">
+                <option value="paragraph">문단</option>
+                <option value="sentence">문장</option>
+            </select>
+            <button id="btn-text-compare" class="btn btn-primary">텍스트 비교</button>
+            <span id="text-msg" class="hint"></span>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div id="meta" class="hint" style="margin-bottom:10px;">비교할 종목/보고서를 선택하세요.</div>
+        <div class="grid-3">
+            <div class="card"><div class="k">변경 항목 수</div><div id="cnt-changed" class="v">-</div></div>
+            <div class="card"><div class="k">비교1에만 있는 항목</div><div id="cnt-left" class="v">-</div></div>
+            <div class="card"><div class="k">비교2에만 있는 항목</div><div id="cnt-right" class="v">-</div></div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h3 style="margin-bottom:8px;">변경 항목 (금액 차이 큰 순)</h3>
+        <div style="overflow:auto; max-height:52vh;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>계정</th>
+                        <th class="right">비교1</th>
+                        <th class="right">비교2</th>
+                        <th class="right">차이(비교2-비교1)</th>
+                        <th class="right">증감률</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-changed"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="row" style="align-items:flex-start;">
+            <div style="flex:1; min-width:320px;">
+                <h3 style="margin-bottom:8px;">비교1에만 있는 항목</h3>
+                <div style="overflow:auto; max-height:34vh;">
+                    <table>
+                        <thead><tr><th>구분</th><th>계정</th><th class="right">금액</th></tr></thead>
+                        <tbody id="tbody-left"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="flex:1; min-width:320px;">
+                <h3 style="margin-bottom:8px;">비교2에만 있는 항목</h3>
+                <div style="overflow:auto; max-height:34vh;">
+                    <table>
+                        <thead><tr><th>구분</th><th>계정</th><th class="right">금액</th></tr></thead>
+                        <tbody id="tbody-right"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h3 style="margin-bottom:8px;">텍스트 비교 요약</h3>
+        <div id="text-meta" class="hint" style="margin-bottom:10px;">텍스트 비교를 실행하면 결과가 표시됩니다.</div>
+        <div class="grid-3">
+            <div class="card"><div class="k">변경</div><div id="text-cnt-changed" class="v">-</div></div>
+            <div class="card"><div class="k">삭제(비교2만 존재)</div><div id="text-cnt-added" class="v">-</div></div>
+            <div class="card"><div class="k">추가(비교1만 존재)</div><div id="text-cnt-removed" class="v">-</div></div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h3 style="margin-bottom:8px;">텍스트 차이 상세</h3>
+        <div class="row" style="margin-bottom:8px;">
+            <button id="text-filter-all" class="btn btn-primary">전체</button>
+            <button id="text-filter-changed" class="btn">변경</button>
+            <button id="text-filter-added" class="btn">추가</button>
+            <button id="text-filter-removed" class="btn">삭제</button>
+            <input id="text-search-keyword" class="input" placeholder="단어 검색" style="margin-left:auto; min-width:220px;">
+            <button id="btn-text-search-clear" class="btn btn-secondary">초기화</button>
+        </div>
+        <div style="overflow:auto; max-height:52vh;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:90px;">유형</th>
+                        <th>비교1 텍스트</th>
+                        <th>비교2 텍스트</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-text-diff"></tbody>
+            </table>
+        </div>
+        <div class="row" style="margin-top:8px;">
+            <span id="text-render-info" class="hint"></span>
+            <button id="btn-text-more" class="btn btn-secondary">더보기</button>
+        </div>
+    </section>
+</main>
+
+<script src="/static/disclosure-compare.js?v=20260325-3"></script>
+</body>
+</html>

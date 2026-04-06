@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>종목주가 모니터링</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .panel { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+        .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .input, .select { border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px; min-height:36px; }
+        .hint { color:var(--text-secondary); font-size:12px; }
+        .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .tab-btn { border:1px solid var(--border); background:#fff; border-radius:999px; padding:7px 12px; cursor:pointer; font-size:13px; }
+        .tab-btn.active { border-color:var(--primary); color:var(--primary); font-weight:700; }
+        .tab-pane { display:none; }
+        .tab-pane.active { display:block; }
+        .period-sort { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+        .period-sort .tab-btn { padding:6px 10px; font-size:12px; }
+        .metric { border:1px solid var(--border); border-radius:10px; padding:10px; min-width:140px; background:#fafafa; }
+        .metric .v { font-weight:700; font-size:18px; }
+        .suggest-wrap { border:1px solid var(--border); border-radius:10px; padding:8px; background:#fafafa; min-height:42px; }
+        .pos { color:#16a34a; }
+        .neg { color:#dc2626; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { border-bottom:1px solid var(--border); padding:8px; font-size:13px; }
+        th { color:var(--text-secondary); background:#fafafa; position:sticky; top:0; z-index:2; }
+        th.sortable { cursor:pointer; user-select:none; }
+        th.sortable.active { color:var(--primary); font-weight:700; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="header-top">
+        <div class="nav-tabs">
+            <div class="nav-group">
+                <span class="nav-group-label">시장</span>
+                <a href="/market" class="nav-tab">국내</a>
+                <a href="/us-market" class="nav-tab">미국</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">수출</span>
+                <a href="/" class="nav-tab">기업</a>
+                <a href="/industry" class="nav-tab">산업</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">참고 데이터</span>
+                <a href="/carbon" class="nav-tab">탄소배출권</a>
+                <a href="/tourism" class="nav-tab">관광</a>
+                <a href="/headcount" class="nav-tab">인원</a>
+                    <a href="/usdc" class="nav-tab">USDC</a>
+                    <a href="/deposit-fund" class="nav-tab">예탁금</a>
+                    <a href="/semiconductor-prices" class="nav-tab">반도체가격</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">개별 종목 데이터</span>
+                <a href="/trading-trend" class="nav-tab">매매동향</a>
+                <a href="/quarterly-performance" class="nav-tab">분기실적</a>
+                <a href="/stock-monitor" class="nav-tab active">종목주가</a>
+                <a href="/disclosure-compare" class="nav-tab">공시비교</a>
+                <a href="/overhang" class="nav-tab">오버행 현황</a>
+            </div>
+            <div class="nav-group">
+                <span class="nav-group-label">모니터링</span>
+                <a href="/youtube" class="nav-tab">유튜브</a>
+                <a href="/blog" class="nav-tab">블로그</a>
+            </div>
+            <span class="nav-spacer"></span>
+            <a href="/visit" class="nav-tab">탐방</a>
+        </div>
+        <h1>종목주가 모니터링</h1>
+    </div>
+    <p class="subtitle">전일 종가 기준 수익률 및 종목별 주가 추이</p>
+</header>
+
+<main>
+    <section class="panel">
+        <div class="row" style="margin-bottom:10px;">
+            <button id="tab-btn-single" class="tab-btn active">개별 종목</button>
+            <button id="tab-btn-all" class="tab-btn">전종목</button>
+        </div>
+
+        <div id="tab-single" class="tab-pane active">
+            <div class="row" style="margin-bottom:8px;">
+                <input id="single-stock-query" class="input" placeholder="종목명 입력 (예: 삼성전자)" style="min-width:280px;">
+                <button id="btn-search-single" class="btn btn-secondary">검색</button>
+                <button id="btn-load-single" class="btn btn-primary">조회</button>
+                <span id="single-selected" class="hint"></span>
+            </div>
+            <div id="single-stock-suggest" class="suggest-wrap" style="margin-bottom:8px;">
+                <span class="hint">종목명을 입력하고 검색하면 후보가 표시됩니다.</span>
+            </div>
+            <div class="row" style="margin-bottom:8px;">
+                <span id="single-asof" class="hint"></span>
+            </div>
+            <div class="row" id="single-metrics" style="margin-bottom:10px;"></div>
+            <canvas id="single-chart" height="160"></canvas>
+        </div>
+
+        <div id="tab-all" class="tab-pane">
+            <div class="row" style="margin-bottom:8px;">
+                <button id="btn-refresh-all" class="btn btn-secondary">전종목 수익률 갱신(배치)</button>
+                <span id="all-msg" class="hint"></span>
+            </div>
+            <div id="all-period-sort" class="period-sort">
+                <button class="tab-btn period-btn" data-key="5y">5년</button>
+                <button class="tab-btn period-btn" data-key="3y">3년</button>
+                <button class="tab-btn period-btn" data-key="1y">1년</button>
+                <button class="tab-btn period-btn" data-key="6m">6개월</button>
+                <button class="tab-btn period-btn" data-key="1m">1개월</button>
+                <button class="tab-btn period-btn active" data-key="1w">1주일</button>
+            </div>
+            <div class="desktop-only" style="overflow:auto; max-height:68vh;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>종목</th>
+                            <th>기준일</th>
+                            <th class="right">종가</th>
+                            <th class="right sortable" data-key="5y">5년</th>
+                            <th class="right sortable" data-key="3y">3년</th>
+                            <th class="right sortable" data-key="1y">1년</th>
+                            <th class="right sortable" data-key="6m">6개월</th>
+                            <th class="right sortable" data-key="1m">1개월</th>
+                            <th class="right sortable active" data-key="1w">1주일</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script src="/static/stock-monitor.js?v=20260323-2"></script>
+</body>
+</html>

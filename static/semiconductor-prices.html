@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>반도체 가격 모니터링</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <div class="nav-tabs">
+                <div class="nav-group">
+                    <span class="nav-group-label">시장</span>
+                    <a href="/market" class="nav-tab">국내</a>
+                    <a href="/us-market" class="nav-tab">미국</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-label">수출</span>
+                    <a href="/" class="nav-tab">기업</a>
+                    <a href="/industry" class="nav-tab">산업</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-label">참고 데이터</span>
+                    <a href="/carbon" class="nav-tab">탄소배출권</a>
+                    <a href="/tourism" class="nav-tab">관광</a>
+                    <a href="/headcount" class="nav-tab">인원</a>
+                    <a href="/usdc" class="nav-tab">USDC</a>
+                    <a href="/deposit-fund" class="nav-tab">예탁금</a>
+                    <a href="/semiconductor-prices" class="nav-tab active">반도체가격</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-label">개별 종목 데이터</span>
+                    <a href="/trading-trend" class="nav-tab">매매동향</a>
+                    <a href="/quarterly-performance" class="nav-tab">분기실적</a>
+                    <a href="/stock-monitor" class="nav-tab">종목주가</a>
+                    <a href="/disclosure-compare" class="nav-tab">공시비교</a>
+                <a href="/overhang" class="nav-tab">오버행 현황</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-label">모니터링</span>
+                    <a href="/youtube" class="nav-tab">유튜브</a>
+                    <a href="/blog" class="nav-tab">블로그</a>
+                </div>
+                <span class="nav-spacer"></span>
+                <a href="/visit" class="nav-tab">탐방</a>
+            </div>
+            <h1>반도체 가격 모니터링</h1>
+        </div>
+        <p class="subtitle">DRAM / NAND Contract Price 일별 스냅샷</p>
+    </header>
+
+    <main>
+        <section class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="sel-market">구분</label>
+                    <select id="sel-market">
+                        <option value="ALL">전체</option>
+                        <option value="DRAM">DRAM</option>
+                        <option value="NAND">NAND</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="sel-range">조회 기간</label>
+                    <select id="sel-range">
+                        <option value="30">1개월</option>
+                        <option value="90" selected>3개월</option>
+                        <option value="180">6개월</option>
+                        <option value="365">1년</option>
+                    </select>
+                </div>
+                <button id="btn-refresh" class="btn btn-primary">데이터 갱신</button>
+                <button id="btn-template-csv" class="btn btn-secondary">CSV 템플릿 다운로드</button>
+                <input id="csv-file" type="file" accept=".csv" style="max-width:260px;">
+                <button id="btn-import-csv" class="btn btn-secondary">CSV 업로드</button>
+                <span id="status-msg" class="hint"></span>
+            </div>
+            <p class="hint" style="margin-top:8px;">
+                CSV 필수 컬럼: <code>trading_date, market_type, product_name</code> (예: 2025-03-19, DRAM, DDR4 8Gb)
+            </p>
+        </section>
+
+        <section class="summary-cards" id="summary-cards"></section>
+
+        <section class="chart-container">
+            <h3>일별 평균 가격 추이 (Session Average 평균)</h3>
+            <canvas id="semi-chart"></canvas>
+        </section>
+
+        <section class="data-table-section">
+            <h3>최신일 품목별 가격</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-sort="market_type">구분</th>
+                            <th data-sort="product_name" style="text-align:left;">품목</th>
+                            <th data-sort="daily_high">Daily High</th>
+                            <th data-sort="daily_low">Daily Low</th>
+                            <th data-sort="session_avg">Session Avg</th>
+                            <th data-sort="session_change_pct">Session Change %</th>
+                            <th data-sort="source_updated_at">소스 업데이트</th>
+                        </tr>
+                    </thead>
+                    <tbody id="semi-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>데이터 출처: <a href="https://www.trendforce.com/price" target="_blank">TrendForce</a></p>
+    </footer>
+
+    <script src="/static/semiconductor-prices.js"></script>
+</body>
+</html>

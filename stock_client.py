@@ -100,3 +100,40 @@ async def fetch_daily_stock_prices(stock_code: str, count: int = 500) -> list[di
         })
 
     return results
+
+
+async def fetch_daily_index_prices(symbol: str = "KOSPI", count: int = 260) -> list[dict]:
+    """Fetch daily index prices from Naver Finance chart API."""
+    params = {
+        "symbol": symbol,
+        "timeframe": "day",
+        "count": str(count),
+        "requestType": "0",
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(NAVER_CHART_URL, params=params)
+        resp.raise_for_status()
+
+    raw = []
+    for match in re.finditer(r'data="(\d{8})\|([0-9.]+)\|([0-9.]+)\|([0-9.]+)\|([0-9.]+)\|(\d+)"', resp.text):
+        raw.append({
+            "date": match.group(1),
+            "close": float(match.group(5)),
+            "volume": int(match.group(6)),
+        })
+
+    raw.sort(key=lambda x: x["date"])
+    results = []
+    prev_close = None
+    for row in raw:
+        close = float(row["close"])
+        change_pct = ((close - prev_close) / prev_close * 100.0) if prev_close else 0.0
+        results.append({
+            "date": row["date"],
+            "close": close,
+            "volume": row["volume"],
+            "change_pct": round(change_pct, 4),
+        })
+        prev_close = close
+    return results

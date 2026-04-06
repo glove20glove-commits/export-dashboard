@@ -295,7 +295,9 @@ function updateHiresLossesChart(data) {
 // --- Table ---
 function updateTable(data) {
     const tbody = document.querySelector('#data-table tbody');
+    const mobileWrap = document.getElementById('detail-mobile-cards');
     tbody.innerHTML = '';
+    if (mobileWrap) mobileWrap.innerHTML = '';
     data.forEach(d => {
         const net = d.new_hires - d.losses;
         const netClass = net < 0 ? 'negative' : (net > 0 ? 'positive' : '');
@@ -308,7 +310,28 @@ function updateTable(data) {
             <td class="${netClass}">${net >= 0 ? '+' : ''}${num(net)}</td>
         `;
         tbody.appendChild(tr);
+
+        if (mobileWrap) {
+            const card = document.createElement('div');
+            card.className = 'mobile-card';
+            card.innerHTML = `
+                <div class="m-head">
+                    <div class="m-title">${d.year}-${d.month}</div>
+                </div>
+                <div class="m-grid">
+                    <div class="m-k">가입자수</div><div class="m-v">${num(d.subscribers)}</div>
+                    <div class="m-k">입사</div><div class="m-v">${num(d.new_hires)}</div>
+                    <div class="m-k">퇴사</div><div class="m-v">${num(d.losses)}</div>
+                    <div class="m-k">순증감</div><div class="m-v ${netClass}">${net >= 0 ? '+' : ''}${num(net)}</div>
+                </div>
+            `;
+            mobileWrap.appendChild(card);
+        }
     });
+
+    if (mobileWrap && data.length === 0) {
+        mobileWrap.innerHTML = '<div class="mobile-empty">표시할 데이터가 없습니다.</div>';
+    }
 }
 
 function sortTable(col) {

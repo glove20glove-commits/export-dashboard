@@ -1,19 +1,15 @@
 const API = '';
+const GLOBAL_CARBON_CACHE_KEY = 'carbon-global-cache-v1';
 let priceChart = null;
 let volumeChart = null;
+let globalCarbonChart = null;
 let currentData = [];
-let sortCol = null;
-let sortAsc = true;
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('item-select').addEventListener('change', loadData);
     document.getElementById('period-select').addEventListener('change', loadData);
     document.getElementById('btn-refresh').addEventListener('click', loadData);
-
-    document.querySelectorAll('#data-table th').forEach(th => {
-        th.addEventListener('click', () => sortTable(th.dataset.sort));
-    });
 
     await loadData();
 });
@@ -52,9 +48,26 @@ async function loadData() {
         updateCards(data);
         updatePriceChart(data, stockMap);
         updateVolumeChart(data, stockMap);
-        updateTable(data);
     } catch (e) {
         console.error('Failed to load carbon data:', e);
+        return;
+    }
+
+    try {
+        const globalData = await api('GET', `/api/carbon/global?days=${days > 0 ? days : 365}`);
+        const merged = mergeGlobalCarbonPayload(loadCachedGlobalCarbon(), globalData);
+        if ((merged.regions || []).some(r => (r.history || []).length > 0)) {
+            try {
+                localStorage.setItem(GLOBAL_CARBON_CACHE_KEY, JSON.stringify(merged));
+            } catch (err) {
+                console.warn('Failed to cache global carbon data:', err);
+            }
+        }
+        updateGlobalCarbon(merged);
+    } catch (e) {
+        console.error('Failed to load global carbon data:', e);
+        const cached = loadCachedGlobalCarbon();
+        updateGlobalCarbon(cached || { regions: [] });
     }
 }
 
@@ -229,59 +242,145 @@ function updateVolumeChart(data, stockMap) {
     });
 }
 
-// --- Table ---
-function updateTable(data) {
-    const tbody = document.querySelector('#data-table tbody');
-    tbody.innerHTML = '';
-    // Show newest first in table
-    const sorted = [...data].reverse();
-    sorted.forEach(d => {
-        const tr = document.createElement('tr');
-        const sign = d.change > 0 ? '+' : '';
-        tr.innerHTML = `
-            <td>${fmtDate(d.date)}</td>
-            <td>${num(d.close)}</td>
-            <td class="${d.change < 0 ? 'negative' : ''}">${sign}${num(d.change)}</td>
-            <td class="${d.change_rate < 0 ? 'negative' : ''}">${sign}${d.change_rate}</td>
-            <td>${num(d.volume)}</td>
-            <td>${num(d.trade_amount)}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function sortTable(col) {
-    if (sortCol === col) {
-        sortAsc = !sortAsc;
-    } else {
-        sortCol = col;
-        sortAsc = true;
-    }
-
-    document.querySelectorAll('#data-table th').forEach(th => {
-        th.classList.remove('sorted-asc', 'sorted-desc');
-        if (th.dataset.sort === col) {
-            th.classList.add(sortAsc ? 'sorted-asc' : 'sorted-desc');
-        }
-    });
-
-    currentData.sort((a, b) => {
-        let va = a[col], vb = b[col];
-        if (va < vb) return sortAsc ? -1 : 1;
-        if (va > vb) return sortAsc ? 1 : -1;
-        return 0;
-    });
-
-    updateTable(currentData);
-}
-
 // --- Helpers ---
 function num(n) {
     return Number(n).toLocaleString('ko-KR');
 }
 
+function loadCachedGlobalCarbon() {
+    try {
+        const raw = localStorage.getItem(GLOBAL_CARBON_CACHE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        console.warn('Failed to read cached global carbon data:', e);
+        return null;
+    }
+}
+
+function mergeGlobalCarbonPayload(cached, incoming) {
+    const cachedRegions = new Map(((cached && cached.regions) || []).map(r => [r.region_key, r]));
+    const mergedRegions = [];
+    const incomingRegions = (incoming && incoming.regions) || [];
+
+    incomingRegions.forEach(region => {
+        const hasData = (region.history || []).some(row => row.close_krw != null);
+        if (hasData) {
+            mergedRegions.push(region);
+        } else if (cachedRegions.has(region.region_key)) {
+            mergedRegions.push(cachedRegions.get(region.region_key));
+        } else {
+            mergedRegions.push(region);
+        }
+        cachedRegions.delete(region.region_key);
+    });
+
+    cachedRegions.forEach(region => mergedRegions.push(region));
+    return { ...(incoming || {}), regions: mergedRegions };
+}
+
 function showAll() {
     document.getElementById('carbon-cards').style.display = '';
     document.getElementById('charts-section').style.display = '';
-    document.getElementById('table-section').style.display = '';
+    document.getElementById('global-carbon-section').style.display = '';
+}
+
+function updateGlobalCarbon(payload) {
+    const regions = ((payload && payload.regions) || []).filter(r => (r.history || []).some(row => row.close_krw != null));
+    const cardsWrap = document.getElementById('global-carbon-cards');
+    cardsWrap.innerHTML = '';
+    if (globalCarbonChart) {
+        globalCarbonChart.destroy();
+        globalCarbonChart = null;
+    }
+    if (!regions.length) {
+        document.getElementById('global-carbon-section').style.display = 'none';
+        return;
+    }
+    document.getElementById('global-carbon-section').style.display = '';
+
+    regions.forEach(region => {
+        const latest = region.latest || {};
+        const sign = (latest.change || 0) > 0 ? '+' : '';
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+            <div class="card-label">${region.region_name}</div>
+            <div class="card-value">${latest.close_krw != null ? num(Math.round(latest.close_krw)) + '원' : '-'}</div>
+            <div class="card-sub ${latest.change_rate < 0 ? 'negative' : (latest.change_rate > 0 ? 'positive' : '')}">
+                ${latest.change != null ? `${sign}${num(latest.change)} (${sign}${latest.change_rate}%)` : '-'}
+            </div>
+            <div class="card-sub" style="margin-top:8px; color:#64748b;">
+                ${latest.date || '-'} · ${latest.close != null ? `${num(latest.close)} ${region.unit}` : '-'}${region.fx_rate_to_krw ? ` · ${region.fx_code}/KRW ${num(region.fx_rate_to_krw)}` : ''}${region.note ? ` · ${region.note}` : ''}
+            </div>
+        `;
+        cardsWrap.appendChild(card);
+    });
+
+    const labels = buildGlobalLabels(regions);
+    const datasets = regions.map((region, idx) => {
+        const palette = ['#0f766e', '#dc2626', '#2563eb'];
+        const color = palette[idx % palette.length];
+        const map = new Map((region.history || []).map(row => [row.date, row]));
+        const aligned = labels.map(label => map.get(label)?.close_krw ?? null);
+        const indexed = indexSeries(aligned);
+        return {
+            label: `${region.region_name} (원화환산)`,
+            data: indexed,
+            borderColor: color,
+            backgroundColor: color + '22',
+            spanGaps: true,
+            tension: 0.25,
+            pointRadius: 1,
+            fill: false,
+        };
+    });
+
+    if (globalCarbonChart) globalCarbonChart.destroy();
+    globalCarbonChart = new Chart(document.getElementById('chart-global-carbon'), {
+        type: 'line',
+        data: {
+            labels: labels.map(fmtIsoDate),
+            datasets,
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: {
+                    title: { display: true, text: '기준일=100' },
+                    ticks: {
+                        callback: v => `${v}`,
+                    },
+                },
+                x: {
+                    ticks: { maxTicksLimit: 10 },
+                },
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.raw == null ? null : `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}`,
+                    },
+                },
+            },
+        },
+    });
+}
+
+function buildGlobalLabels(regions) {
+    const seen = new Set();
+    regions.forEach(region => {
+        (region.history || []).forEach(row => seen.add(row.date));
+    });
+    return [...seen].sort();
+}
+
+function indexSeries(values) {
+    const base = values.find(v => v != null && Number.isFinite(v));
+    if (!base) return values.map(() => null);
+    return values.map(v => (v == null ? null : (v / base) * 100));
+}
+
+function fmtIsoDate(s) {
+    return s || '-';
 }

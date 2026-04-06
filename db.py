@@ -284,6 +284,183 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_blog_articles_feed
             ON blog_articles(feed_id, published_at);
+
+            CREATE TABLE IF NOT EXISTS us_market_daily (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                trading_date    TEXT NOT NULL UNIQUE,
+                sp500_close     REAL DEFAULT 0,
+                sp500_change_pct REAL DEFAULT 0,
+                nasdaq_close    REAL DEFAULT 0,
+                nasdaq_change_pct REAL DEFAULT 0,
+                summary_text    TEXT DEFAULT '',
+                key_factors     TEXT DEFAULT '[]',
+                sectors_strong  TEXT DEFAULT '[]',
+                sectors_weak    TEXT DEFAULT '[]',
+                earnings_text   TEXT DEFAULT '',
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS kr_market_daily (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                trading_date      TEXT NOT NULL UNIQUE,
+                kospi_close       REAL DEFAULT 0,
+                kospi_change_pct  REAL DEFAULT 0,
+                kosdaq_close      REAL DEFAULT 0,
+                kosdaq_change_pct REAL DEFAULT 0,
+                summary_text      TEXT DEFAULT '',
+                key_factors       TEXT DEFAULT '[]',
+                created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS insider_buy_monitor (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date      TEXT NOT NULL,
+                company_name    TEXT NOT NULL,
+                stock_code      TEXT DEFAULT '',
+                related_party   TEXT NOT NULL,
+                relation_type   TEXT DEFAULT '',
+                change_shares   INTEGER DEFAULT 0,
+                change_ratio    REAL DEFAULT 0,
+                avg_price       REAL DEFAULT 0,
+                amount_krw      REAL DEFAULT 0,
+                source_title    TEXT DEFAULT '',
+                source_url      TEXT DEFAULT '',
+                note            TEXT DEFAULT '',
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_insider_buy_monitor_date
+            ON insider_buy_monitor(trade_date DESC, created_at DESC);
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_insider_buy_source_url
+            ON insider_buy_monitor(source_url)
+            WHERE source_url <> '';
+
+            CREATE TABLE IF NOT EXISTS quarterly_perf_watchlist (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code      TEXT NOT NULL UNIQUE,
+                stock_name      TEXT NOT NULL,
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS quarterly_perf_data (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code          TEXT NOT NULL,
+                stock_name          TEXT NOT NULL,
+                quarter_key         TEXT NOT NULL,  -- YYYYQn
+                revenue             REAL DEFAULT 0,
+                operating_profit    REAL DEFAULT 0,
+                net_income          REAL DEFAULT 0,
+                source_url          TEXT DEFAULT '',
+                fetched_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(stock_code, quarter_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_quarterly_perf_qk
+            ON quarterly_perf_data(quarter_key, stock_code);
+
+            CREATE TABLE IF NOT EXISTS quarterly_perf_reason (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code      TEXT NOT NULL,
+                quarter_key     TEXT NOT NULL,
+                reason_text     TEXT DEFAULT '',
+                auto_generated  INTEGER DEFAULT 0,
+                updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(stock_code, quarter_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS stock_monitor_returns (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code          TEXT NOT NULL UNIQUE,
+                stock_name          TEXT NOT NULL,
+                as_of_date          TEXT NOT NULL,
+                latest_close        REAL DEFAULT 0,
+                ret_5y              REAL,
+                ret_3y              REAL,
+                ret_1y              REAL,
+                ret_6m              REAL,
+                ret_1m              REAL,
+                ret_1w              REAL,
+                updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_stock_monitor_ret_1w ON stock_monitor_returns(ret_1w);
+            CREATE INDEX IF NOT EXISTS idx_stock_monitor_ret_1m ON stock_monitor_returns(ret_1m);
+            CREATE INDEX IF NOT EXISTS idx_stock_monitor_ret_6m ON stock_monitor_returns(ret_6m);
+            CREATE INDEX IF NOT EXISTS idx_stock_monitor_ret_1y ON stock_monitor_returns(ret_1y);
+            CREATE INDEX IF NOT EXISTS idx_stock_monitor_ret_3y ON stock_monitor_returns(ret_3y);
+            CREATE INDEX IF NOT EXISTS idx_stock_monitor_ret_5y ON stock_monitor_returns(ret_5y);
+
+            CREATE TABLE IF NOT EXISTS overhang_lockups (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code          TEXT NOT NULL,
+                stock_name          TEXT NOT NULL,
+                holder_name         TEXT NOT NULL,
+                holder_type         TEXT DEFAULT '',
+                lockup_end_date     TEXT NOT NULL, -- YYYY-MM-DD
+                quantity            INTEGER NOT NULL DEFAULT 0,
+                source_note         TEXT DEFAULT '',
+                created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_overhang_lockups_stock
+            ON overhang_lockups(stock_code, lockup_end_date, holder_name);
+
+            CREATE TABLE IF NOT EXISTS overhang_exercises (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code          TEXT NOT NULL,
+                stock_name          TEXT NOT NULL,
+                exercise_date       TEXT NOT NULL, -- YYYY-MM-DD
+                quantity            INTEGER NOT NULL DEFAULT 0,
+                note                TEXT DEFAULT '',
+                created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_overhang_exercises_stock
+            ON overhang_exercises(stock_code, exercise_date);
+
+            CREATE TABLE IF NOT EXISTS usdc_supply_daily (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                trading_date        TEXT NOT NULL UNIQUE,
+                supply_amount       REAL DEFAULT 0,
+                market_cap_usd      REAL DEFAULT 0,
+                price_usd           REAL DEFAULT 0,
+                updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_usdc_supply_date
+            ON usdc_supply_daily(trading_date DESC);
+
+            CREATE TABLE IF NOT EXISTS stablecoin_supply_daily (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_symbol        TEXT NOT NULL,
+                trading_date        TEXT NOT NULL,
+                supply_amount       REAL DEFAULT 0,
+                market_cap_usd      REAL DEFAULT 0,
+                price_usd           REAL DEFAULT 0,
+                updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(asset_symbol, trading_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_stablecoin_supply_symbol_date
+            ON stablecoin_supply_daily(asset_symbol, trading_date DESC);
+
+            CREATE TABLE IF NOT EXISTS semiconductor_price_daily (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_type         TEXT NOT NULL,  -- DRAM / NAND
+                trading_date        TEXT NOT NULL,  -- YYYY-MM-DD snapshot date
+                product_name        TEXT NOT NULL,
+                daily_high          REAL,
+                daily_low           REAL,
+                session_high        REAL,
+                session_low         REAL,
+                session_avg         REAL,
+                session_change_pct  REAL,
+                change_direction    TEXT DEFAULT 'flat', -- up/down/flat
+                source_updated_at   TEXT DEFAULT '',
+                source_url          TEXT DEFAULT '',
+                fetched_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(market_type, trading_date, product_name)
+            );
+            CREATE INDEX IF NOT EXISTS idx_semi_price_date
+            ON semiconductor_price_daily(trading_date DESC);
+            CREATE INDEX IF NOT EXISTS idx_semi_price_market_date
+            ON semiconductor_price_daily(market_type, trading_date DESC);
         """)
         # Migration: add text_content column if missing
         try:
@@ -1158,3 +1335,596 @@ def get_known_blog_guids(feed_id):
             "SELECT guid FROM blog_articles WHERE feed_id = ?", (feed_id,)
         ).fetchall()
         return {r["guid"] for r in rows}
+
+
+# --- US Market Daily CRUD ---
+
+def upsert_us_market_daily(trading_date, sp500_close=0, sp500_change_pct=0,
+                           nasdaq_close=0, nasdaq_change_pct=0,
+                           summary_text="", key_factors="[]",
+                           sectors_strong="[]", sectors_weak="[]",
+                           earnings_text=""):
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO us_market_daily
+                (trading_date, sp500_close, sp500_change_pct,
+                 nasdaq_close, nasdaq_change_pct,
+                 summary_text, key_factors, sectors_strong, sectors_weak,
+                 earnings_text, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(trading_date) DO UPDATE SET
+                sp500_close = excluded.sp500_close,
+                sp500_change_pct = excluded.sp500_change_pct,
+                nasdaq_close = excluded.nasdaq_close,
+                nasdaq_change_pct = excluded.nasdaq_change_pct,
+                summary_text = excluded.summary_text,
+                key_factors = excluded.key_factors,
+                sectors_strong = excluded.sectors_strong,
+                sectors_weak = excluded.sectors_weak,
+                earnings_text = excluded.earnings_text,
+                updated_at = CURRENT_TIMESTAMP
+        """, (trading_date, sp500_close, sp500_change_pct,
+              nasdaq_close, nasdaq_change_pct,
+              summary_text, key_factors, sectors_strong, sectors_weak,
+              earnings_text))
+
+
+def get_us_market_daily(year, month):
+    with get_db() as conn:
+        prefix = f"{int(year):04d}-{int(month):02d}"
+        rows = conn.execute(
+            "SELECT * FROM us_market_daily WHERE trading_date LIKE ? ORDER BY trading_date",
+            (prefix + "%",)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_us_market_daily_by_date(trading_date):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM us_market_daily WHERE trading_date = ?", (trading_date,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_us_market_summary(trading_date, summary_text, key_factors="[]",
+                             sectors_strong="[]", sectors_weak="[]",
+                             earnings_text=""):
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE us_market_daily
+            SET summary_text = ?, key_factors = ?, sectors_strong = ?,
+                sectors_weak = ?, earnings_text = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE trading_date = ?
+        """, (summary_text, key_factors, sectors_strong, sectors_weak,
+              earnings_text, trading_date))
+
+
+# --- KR Market Daily CRUD ---
+
+def upsert_kr_market_daily(
+    trading_date,
+    kospi_close=0,
+    kospi_change_pct=0,
+    kosdaq_close=0,
+    kosdaq_change_pct=0,
+    summary_text="",
+    key_factors="[]",
+):
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO kr_market_daily
+                (trading_date, kospi_close, kospi_change_pct,
+                 kosdaq_close, kosdaq_change_pct,
+                 summary_text, key_factors, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(trading_date) DO UPDATE SET
+                kospi_close = excluded.kospi_close,
+                kospi_change_pct = excluded.kospi_change_pct,
+                kosdaq_close = excluded.kosdaq_close,
+                kosdaq_change_pct = excluded.kosdaq_change_pct,
+                summary_text = excluded.summary_text,
+                key_factors = excluded.key_factors,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            trading_date, kospi_close, kospi_change_pct,
+            kosdaq_close, kosdaq_change_pct,
+            summary_text, key_factors,
+        ))
+
+
+def get_kr_market_daily(year, month):
+    with get_db() as conn:
+        prefix = f"{int(year):04d}-{int(month):02d}"
+        rows = conn.execute(
+            "SELECT * FROM kr_market_daily WHERE trading_date LIKE ? ORDER BY trading_date",
+            (prefix + "%",),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_kr_market_daily_by_date(trading_date):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM kr_market_daily WHERE trading_date = ?",
+            (trading_date,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+# --- USDC Supply Daily CRUD ---
+
+def upsert_usdc_supply_daily(trading_date, supply_amount=0, market_cap_usd=0, price_usd=0):
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO usdc_supply_daily
+                (trading_date, supply_amount, market_cap_usd, price_usd, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(trading_date) DO UPDATE SET
+                supply_amount = excluded.supply_amount,
+                market_cap_usd = excluded.market_cap_usd,
+                price_usd = excluded.price_usd,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            trading_date,
+            float(supply_amount or 0),
+            float(market_cap_usd or 0),
+            float(price_usd or 0),
+        ))
+
+
+def get_usdc_supply_daily(days: int = 0):
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM usdc_supply_daily ORDER BY trading_date"
+        ).fetchall()]
+        if days and int(days) > 0 and rows:
+            keep = max(1, int(days))
+            return rows[-keep:]
+        return rows
+
+
+def upsert_stablecoin_supply_daily(asset_symbol, trading_date, supply_amount=0, market_cap_usd=0, price_usd=0):
+    symbol = (asset_symbol or "").strip().upper()
+    if not symbol:
+        return
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO stablecoin_supply_daily
+                (asset_symbol, trading_date, supply_amount, market_cap_usd, price_usd, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(asset_symbol, trading_date) DO UPDATE SET
+                supply_amount = excluded.supply_amount,
+                market_cap_usd = excluded.market_cap_usd,
+                price_usd = excluded.price_usd,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            symbol,
+            trading_date,
+            float(supply_amount or 0),
+            float(market_cap_usd or 0),
+            float(price_usd or 0),
+        ))
+
+
+def get_stablecoin_supply_daily(asset_symbol: str, days: int = 0):
+    symbol = (asset_symbol or "").strip().upper()
+    if not symbol:
+        return []
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM stablecoin_supply_daily WHERE asset_symbol = ? ORDER BY trading_date",
+            (symbol,),
+        ).fetchall()]
+        if days and int(days) > 0 and rows:
+            keep = max(1, int(days))
+            return rows[-keep:]
+        return rows
+
+
+# --- Semiconductor Price Daily CRUD ---
+
+def upsert_semiconductor_price_daily(
+    market_type,
+    trading_date,
+    product_name,
+    daily_high=None,
+    daily_low=None,
+    session_high=None,
+    session_low=None,
+    session_avg=None,
+    session_change_pct=None,
+    change_direction="flat",
+    source_updated_at="",
+    source_url="",
+):
+    mt = (market_type or "").strip().upper()
+    if mt not in {"DRAM", "NAND"}:
+        return
+    name = (product_name or "").strip()
+    if not name or not trading_date:
+        return
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO semiconductor_price_daily
+                (market_type, trading_date, product_name,
+                 daily_high, daily_low, session_high, session_low, session_avg,
+                 session_change_pct, change_direction, source_updated_at, source_url, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(market_type, trading_date, product_name) DO UPDATE SET
+                daily_high = excluded.daily_high,
+                daily_low = excluded.daily_low,
+                session_high = excluded.session_high,
+                session_low = excluded.session_low,
+                session_avg = excluded.session_avg,
+                session_change_pct = excluded.session_change_pct,
+                change_direction = excluded.change_direction,
+                source_updated_at = excluded.source_updated_at,
+                source_url = excluded.source_url,
+                fetched_at = CURRENT_TIMESTAMP
+        """, (
+            mt,
+            trading_date,
+            name,
+            daily_high,
+            daily_low,
+            session_high,
+            session_low,
+            session_avg,
+            session_change_pct,
+            (change_direction or "flat").strip().lower(),
+            source_updated_at or "",
+            source_url or "",
+        ))
+
+
+def get_semiconductor_price_daily(market_type: str | None = None, days: int = 90, trading_date: str | None = None):
+    mt = (market_type or "").strip().upper()
+    if mt not in {"DRAM", "NAND"}:
+        mt = ""
+    with get_db() as conn:
+        if trading_date:
+            if mt:
+                rows = conn.execute(
+                    """SELECT * FROM semiconductor_price_daily
+                       WHERE trading_date = ? AND market_type = ?
+                       ORDER BY market_type, product_name""",
+                    (trading_date, mt),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM semiconductor_price_daily
+                       WHERE trading_date = ?
+                       ORDER BY market_type, product_name""",
+                    (trading_date,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+        params = []
+        where = []
+        if mt:
+            where.append("market_type = ?")
+            params.append(mt)
+        if days and int(days) > 0:
+            where.append("trading_date >= date('now', ?)")
+            params.append(f"-{int(days)} day")
+
+        sql = "SELECT * FROM semiconductor_price_daily"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY trading_date, market_type, product_name"
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_latest_semiconductor_price_date(market_type: str | None = None):
+    mt = (market_type or "").strip().upper()
+    with get_db() as conn:
+        if mt in {"DRAM", "NAND"}:
+            row = conn.execute(
+                "SELECT MAX(trading_date) AS d FROM semiconductor_price_daily WHERE market_type = ?",
+                (mt,),
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT MAX(trading_date) AS d FROM semiconductor_price_daily").fetchone()
+        if row and row["d"]:
+            return str(row["d"])
+        return None
+
+
+# --- Insider Buy Monitor CRUD ---
+
+def add_insider_buy_record(
+    trade_date, company_name, related_party, stock_code="",
+    relation_type="", change_shares=0, change_ratio=0,
+    avg_price=0, amount_krw=0, source_title="", source_url="", note=""
+):
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT INTO insider_buy_monitor
+                (trade_date, company_name, stock_code, related_party, relation_type,
+                 change_shares, change_ratio, avg_price, amount_krw,
+                 source_title, source_url, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            trade_date, company_name, stock_code, related_party, relation_type,
+            int(change_shares or 0), float(change_ratio or 0), float(avg_price or 0),
+            float(amount_krw or 0), source_title, source_url, note
+        ))
+        return cur.lastrowid
+
+
+def get_insider_buy_records(days=30, keyword=None, stock_code=None):
+    with get_db() as conn:
+        query = """
+            SELECT * FROM insider_buy_monitor
+            WHERE trade_date >= date('now', ?)
+        """
+        params = [f"-{int(days)} day"]
+        if keyword:
+            query += " AND (company_name LIKE ? OR related_party LIKE ? OR note LIKE ?)"
+            kw = f"%{keyword}%"
+            params.extend([kw, kw, kw])
+        if stock_code:
+            query += " AND stock_code = ?"
+            params.append(stock_code)
+        query += " ORDER BY trade_date DESC, created_at DESC"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_insider_buy_record(record_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM insider_buy_monitor WHERE id = ?", (record_id,))
+
+
+def get_insider_buy_record_by_source_url(source_url):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM insider_buy_monitor WHERE source_url = ? LIMIT 1",
+            (source_url,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_insider_buy_record_by_source_url(
+    source_url,
+    related_party=None,
+    relation_type=None,
+    change_shares=None,
+    change_ratio=None,
+    avg_price=None,
+    amount_krw=None,
+    note=None,
+):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, related_party, relation_type, change_shares, change_ratio, avg_price, amount_krw, note "
+            "FROM insider_buy_monitor WHERE source_url = ? LIMIT 1",
+            (source_url,),
+        ).fetchone()
+        if not row:
+            return False
+
+        conn.execute("""
+            UPDATE insider_buy_monitor
+            SET related_party = ?,
+                relation_type = ?,
+                change_shares = ?,
+                change_ratio = ?,
+                avg_price = ?,
+                amount_krw = ?,
+                note = ?
+            WHERE source_url = ?
+        """, (
+            related_party if related_party is not None else row["related_party"],
+            relation_type if relation_type is not None else row["relation_type"],
+            int(change_shares if change_shares is not None else row["change_shares"]),
+            float(change_ratio if change_ratio is not None else row["change_ratio"]),
+            float(avg_price if avg_price is not None else row["avg_price"]),
+            float(amount_krw if amount_krw is not None else row["amount_krw"]),
+            note if note is not None else row["note"],
+            source_url,
+        ))
+        return True
+
+
+# --- Quarterly Performance Monitor CRUD ---
+
+def add_quarterly_perf_watch(stock_code, stock_name):
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT INTO quarterly_perf_watchlist (stock_code, stock_name)
+            VALUES (?, ?)
+            ON CONFLICT(stock_code) DO UPDATE SET
+                stock_name = excluded.stock_name
+        """, (stock_code, stock_name))
+        return cur.lastrowid
+
+
+def get_quarterly_perf_watchlist():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM quarterly_perf_watchlist ORDER BY stock_name, stock_code"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_quarterly_perf_watch(stock_code):
+    with get_db() as conn:
+        conn.execute("DELETE FROM quarterly_perf_watchlist WHERE stock_code = ?", (stock_code,))
+
+
+def upsert_quarterly_perf_data(stock_code, stock_name, quarter_key, revenue, operating_profit, net_income, source_url=""):
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO quarterly_perf_data
+                (stock_code, stock_name, quarter_key, revenue, operating_profit, net_income, source_url, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(stock_code, quarter_key) DO UPDATE SET
+                stock_name = excluded.stock_name,
+                revenue = excluded.revenue,
+                operating_profit = excluded.operating_profit,
+                net_income = excluded.net_income,
+                source_url = excluded.source_url,
+                fetched_at = CURRENT_TIMESTAMP
+        """, (stock_code, stock_name, quarter_key, revenue, operating_profit, net_income, source_url))
+
+
+def get_quarterly_perf_data(stock_code=None, quarter_key=None):
+    with get_db() as conn:
+        query = "SELECT * FROM quarterly_perf_data WHERE 1=1"
+        params = []
+        if stock_code:
+            query += " AND stock_code = ?"
+            params.append(stock_code)
+        if quarter_key:
+            query += " AND quarter_key = ?"
+            params.append(quarter_key)
+        query += " ORDER BY quarter_key DESC, stock_name, stock_code"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_quarterly_perf_quarters():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT quarter_key FROM quarterly_perf_data ORDER BY quarter_key DESC"
+        ).fetchall()
+        return [r["quarter_key"] for r in rows]
+
+
+def upsert_quarterly_perf_reason(stock_code, quarter_key, reason_text, auto_generated=False):
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO quarterly_perf_reason (stock_code, quarter_key, reason_text, auto_generated, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(stock_code, quarter_key) DO UPDATE SET
+                reason_text = excluded.reason_text,
+                auto_generated = excluded.auto_generated,
+                updated_at = CURRENT_TIMESTAMP
+        """, (stock_code, quarter_key, reason_text, 1 if auto_generated else 0))
+
+
+def get_quarterly_perf_reasons(quarter_key=None):
+    with get_db() as conn:
+        query = "SELECT * FROM quarterly_perf_reason WHERE 1=1"
+        params = []
+        if quarter_key:
+            query += " AND quarter_key = ?"
+            params.append(quarter_key)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# --- Stock Monitor Returns Cache ---
+
+def upsert_stock_monitor_return(
+    stock_code,
+    stock_name,
+    as_of_date,
+    latest_close,
+    ret_5y=None,
+    ret_3y=None,
+    ret_1y=None,
+    ret_6m=None,
+    ret_1m=None,
+    ret_1w=None,
+):
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO stock_monitor_returns
+                (stock_code, stock_name, as_of_date, latest_close, ret_5y, ret_3y, ret_1y, ret_6m, ret_1m, ret_1w, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(stock_code) DO UPDATE SET
+                stock_name = excluded.stock_name,
+                as_of_date = excluded.as_of_date,
+                latest_close = excluded.latest_close,
+                ret_5y = excluded.ret_5y,
+                ret_3y = excluded.ret_3y,
+                ret_1y = excluded.ret_1y,
+                ret_6m = excluded.ret_6m,
+                ret_1m = excluded.ret_1m,
+                ret_1w = excluded.ret_1w,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            stock_code, stock_name, as_of_date, latest_close,
+            ret_5y, ret_3y, ret_1y, ret_6m, ret_1m, ret_1w,
+        ))
+
+
+def get_stock_monitor_returns(stock_code=None):
+    with get_db() as conn:
+        query = "SELECT * FROM stock_monitor_returns WHERE 1=1"
+        params = []
+        if stock_code:
+            query += " AND stock_code = ?"
+            params.append(stock_code)
+        query += " ORDER BY stock_name, stock_code"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# --- Overhang Monitor CRUD ---
+
+def add_overhang_lockup(
+    stock_code,
+    stock_name,
+    holder_name,
+    lockup_end_date,
+    quantity,
+    holder_type="",
+    source_note="",
+):
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT INTO overhang_lockups
+                (stock_code, stock_name, holder_name, holder_type, lockup_end_date, quantity, source_note, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            stock_code, stock_name, holder_name, holder_type or "",
+            lockup_end_date, int(quantity or 0), source_note or "",
+        ))
+        return cur.lastrowid
+
+
+def delete_overhang_lockup(lockup_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM overhang_lockups WHERE id = ?", (lockup_id,))
+
+
+def get_overhang_lockups(stock_code):
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM overhang_lockups
+            WHERE stock_code = ?
+            ORDER BY lockup_end_date, holder_name, id
+        """, (stock_code,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def add_overhang_exercise(stock_code, stock_name, exercise_date, quantity, note=""):
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT INTO overhang_exercises
+                (stock_code, stock_name, exercise_date, quantity, note)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            stock_code, stock_name, exercise_date, int(quantity or 0), note or "",
+        ))
+        return cur.lastrowid
+
+
+def delete_overhang_exercise(exercise_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM overhang_exercises WHERE id = ?", (exercise_id,))
+
+
+def get_overhang_exercises(stock_code):
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM overhang_exercises
+            WHERE stock_code = ?
+            ORDER BY exercise_date, id
+        """, (stock_code,)).fetchall()
+        return [dict(r) for r in rows]
